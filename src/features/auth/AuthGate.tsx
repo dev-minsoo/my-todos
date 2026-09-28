@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
 import { useAuth } from './useAuth';
+import { AuthContext } from './authContext';
 
 /** 세션이 확보되면 children을 렌더. 로딩/설정 안내 화면 담당. */
 export function AuthGate({ children }: { children: ReactNode }) {
@@ -29,5 +30,5 @@ export function AuthGate({ children }: { children: ReactNode }) {
     );
   }
 
-  return <>{children}</>;
+  return <AuthContext.Provider value={session}>{children}</AuthContext.Provider>;
 }

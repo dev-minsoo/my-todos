@@ -1,50 +1,79 @@
 import type { ReactNode } from 'react';
-import type { Task } from '@/db/types';
+import { ALL_TAB } from '@/db/types';
 import { useUiStore } from '@/store/uiStore';
 import { todayStr } from '@/domain/dayBoundary';
 import { completionCount, deriveSections } from '@/domain/sections';
+import { useSpaces } from '@/features/spaces/useSpaces';
+import { resolveActiveTab } from '@/features/spaces/spaceSelection';
 import { TaskItem } from './TaskItem';
+import { useTasks } from './useTasks';
 
 export function TaskList() {
   const viewedDate = useUiStore((s) => s.viewedDate);
+  const currentTab = useUiStore((s) => s.currentTab);
 
-  // TODO(v0.1): useTasks()로 실제 task를 불러와 대체. 지금은 빈 배열로 도메인 로직만 연결.
-  const tasks: Task[] = [];
+  const { spaces } = useSpaces();
+  const { tasks, isLoading, toggleTask, renameTask, deleteTask } = useTasks();
+
+  const activeTab = resolveActiveTab(currentTab, spaces);
+  const scoped = activeTab === ALL_TAB ? tasks : tasks.filter((t) => t.spaceId === activeTab);
+
   const today = todayStr();
-  const sections = deriveSections(tasks, viewedDate, today);
+  const sections = deriveSections(scoped, viewedDate, today);
   const count = completionCount(sections);
-
-  const isEmpty =
-    sections.carried.length + sections.open.length + sections.completed.length === 0;
+  const isEmpty = count.total === 0;
 
   return (
     <div className="flex flex-1 flex-col overflow-hidden">
       <div className="flex-1 overflow-y-auto">
-        {isEmpty ? (
+        {isLoading && isEmpty ? (
+          <div className="flex h-full min-h-40 items-center justify-center text-sm text-muted">
+            불러오는 중…
+          </div>
+        ) : isEmpty ? (
           <div className="flex h-full min-h-40 flex-col items-center justify-center px-4 text-center text-sm text-muted">
             <p>할 일이 없습니다.</p>
-            <p className="mt-1 text-xs">아래에 적어 보세요. (데이터 연동 예정)</p>
+            <p className="mt-1 text-xs">아래에 적어 보세요.</p>
           </div>
         ) : (
           <>
             {sections.carried.length > 0 && (
               <Section title="넘어옴">
                 {sections.carried.map((t) => (
-                  <TaskItem key={t.id} task={t} overdueDays={t.overdueDays} />
+                  <TaskItem
+                    key={t.id}
+                    task={t}
+                    overdueDays={t.overdueDays}
+                    onToggle={toggleTask}
+                    onRename={renameTask}
+                    onDelete={deleteTask}
+                  />
                 ))}
               </Section>
             )}
             {sections.open.length > 0 && (
               <Section title="할 일">
                 {sections.open.map((t) => (
-                  <TaskItem key={t.id} task={t} />
+                  <TaskItem
+                    key={t.id}
+                    task={t}
+                    onToggle={toggleTask}
+                    onRename={renameTask}
+                    onDelete={deleteTask}
+                  />
                 ))}
               </Section>
             )}
             {sections.completed.length > 0 && (
               <Section title="완료">
                 {sections.completed.map((t) => (
-                  <TaskItem key={t.id} task={t} />
+                  <TaskItem
+                    key={t.id}
+                    task={t}
+                    onToggle={toggleTask}
+                    onRename={renameTask}
+                    onDelete={deleteTask}
+                  />
                 ))}
               </Section>
             )}
