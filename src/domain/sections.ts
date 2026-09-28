@@ -61,3 +61,41 @@ export function completionCount(s: DaySections): CompletionCount {
   const total = s.carried.length + s.open.length + s.completed.length;
   return { total, done: s.completed.length };
 }
+
+/** 전체 탭에서 공간별로 묶은 한 덩어리 (SPEC §82) */
+export type SpaceGroup = {
+  spaceId: string;
+  name: string;
+  color: string;
+  sections: DaySections;
+  count: CompletionCount;
+};
+
+/** 그룹 계산에 필요한 공간 메타(전체 Space 중 일부만 받는다) */
+type SpaceMeta = { id: string; name: string; color: string };
+
+/**
+ * "전체" 탭 화면: 공간별로 묶어서 각각 섹션과 완료 카운트를 계산한다 (SPEC §82, §160).
+ * - 공간 순서는 넘겨받은 spaces 순서를 그대로 따른다.
+ * - 넘어옴·완료 카운트는 공간마다 따로 계산된다 (회사 화면에 개인 일이 섞이지 않는다).
+ * - 그날 보여 줄 항목이 하나도 없는 공간은 결과에서 제외한다.
+ */
+export function groupSectionsBySpace(
+  tasks: Task[],
+  spaces: SpaceMeta[],
+  viewedDate: string,
+  today: string
+): SpaceGroup[] {
+  const groups: SpaceGroup[] = [];
+  for (const sp of spaces) {
+    const sections = deriveSections(
+      tasks.filter((t) => t.spaceId === sp.id),
+      viewedDate,
+      today
+    );
+    const count = completionCount(sections);
+    if (count.total === 0) continue;
+    groups.push({ spaceId: sp.id, name: sp.name, color: sp.color, sections, count });
+  }
+  return groups;
+}

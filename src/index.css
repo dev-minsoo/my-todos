@@ -3,23 +3,52 @@
 @tailwind utilities;
 
 :root {
-  --bg: #f7f7f8;
+  color-scheme: light;
+  --bg: #f4f5f7;
   --surface: #ffffff;
-  --border: #e6e6e9;
-  --text: #1a1a1e;
-  --muted: #8a8a94;
-  --accent: #2f6df6;
+  --surface-2: #eef0f3;
+  --border: #e5e7eb;
+  --text: #111318;
+  --muted: #6b7280;
+  --accent: #4f46e5;
+  --accent-fg: #ffffff;
+  --accent-soft: #eef0fe;
+  --overdue-fg: #b45309;
+  --overdue-bg: #fdecc8;
 }
 
+/* 다크 토큰: 시스템이 다크이고 사용자가 라이트를 강제하지 않았을 때 */
 @media (prefers-color-scheme: dark) {
-  :root {
-    --bg: #0f0f11;
-    --surface: #1a1a1e;
-    --border: #2a2a30;
-    --text: #f2f2f5;
-    --muted: #8a8a94;
-    --accent: #5b8dff;
+  :root:not([data-theme='light']) {
+    color-scheme: dark;
+    --bg: #0a0b0e;
+    --surface: #15171c;
+    --surface-2: #1f2229;
+    --border: #282b33;
+    --text: #f2f3f6;
+    --muted: #9aa1ac;
+    --accent: #6366f1;
+    --accent-fg: #ffffff;
+    --accent-soft: #1c1f33;
+    --overdue-fg: #fbbf24;
+    --overdue-bg: #382c14;
   }
+}
+
+/* 다크 토큰: 사용자가 설정에서 다크를 직접 고른 경우 (시스템 무시) */
+:root[data-theme='dark'] {
+  color-scheme: dark;
+  --bg: #0a0b0e;
+  --surface: #15171c;
+  --surface-2: #1f2229;
+  --border: #282b33;
+  --text: #f2f3f6;
+  --muted: #9aa1ac;
+  --accent: #6366f1;
+  --accent-fg: #ffffff;
+  --accent-soft: #1c1f33;
+  --overdue-fg: #fbbf24;
+  --overdue-bg: #382c14;
 }
 
 html,
@@ -35,4 +64,20 @@ body {
   -webkit-font-smoothing: antialiased;
   font-family:
     -apple-system, BlinkMacSystemFont, 'Pretendard', 'Apple SD Gothic Neo', 'Segoe UI', sans-serif;
+}
+
+/* 은은한 스크롤바 (webkit) */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 9999px;
+  border: 3px solid transparent;
+  background-clip: padding-box;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--muted);
+  background-clip: padding-box;
 }

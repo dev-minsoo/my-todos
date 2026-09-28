@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import type { Task } from '@/db/types';
-import { deriveSections, completionCount } from './sections';
+import { deriveSections, completionCount, groupSectionsBySpace } from './sections';
 
 let seq = 0;
 function makeTask(partial: Partial<Task>): Task {
@@ -82,5 +82,42 @@ describe('completionCount', () => {
     ];
     const s = deriveSections(tasks, TODAY, TODAY);
     expect(completionCount(s)).toEqual({ total: 3, done: 1 });
+  });
+});
+
+describe('groupSectionsBySpace (전체 탭)', () => {
+  const SPACES = [
+    { id: 's1', name: '개인', color: '#2f6df6' },
+    { id: 's2', name: '회사', color: '#e0663b' },
+  ];
+
+  it('공간 순서대로 묶고, 카운트를 공간마다 따로 계산', () => {
+    const tasks = [
+      makeTask({ spaceId: 's1', dueDate: TODAY }), // 개인 open
+      makeTask({ spaceId: 's1', dueDate: TODAY, completedAt: '2026-09-28T10:00:00' }), // 개인 completed
+      makeTask({ spaceId: 's2', dueDate: TODAY }), // 회사 open
+    ];
+    const groups = groupSectionsBySpace(tasks, SPACES, TODAY, TODAY);
+    expect(groups.map((g) => g.spaceId)).toEqual(['s1', 's2']);
+    expect(groups[0].count).toEqual({ total: 2, done: 1 });
+    expect(groups[1].count).toEqual({ total: 1, done: 0 });
+  });
+
+  it('항목이 없는 공간은 결과에서 제외', () => {
+    const tasks = [makeTask({ spaceId: 's1', dueDate: TODAY })];
+    const groups = groupSectionsBySpace(tasks, SPACES, TODAY, TODAY);
+    expect(groups.map((g) => g.spaceId)).toEqual(['s1']);
+  });
+
+  it('회사 넘어옴이 개인 묶음에 섞이지 않는다', () => {
+    const tasks = [
+      makeTask({ spaceId: 's2', dueDate: '2026-09-26' }), // 회사 carried
+      makeTask({ spaceId: 's1', dueDate: TODAY }), // 개인 open
+    ];
+    const groups = groupSectionsBySpace(tasks, SPACES, TODAY, TODAY);
+    const personal = groups.find((g) => g.spaceId === 's1')!;
+    const work = groups.find((g) => g.spaceId === 's2')!;
+    expect(personal.sections.carried).toHaveLength(0);
+    expect(work.sections.carried).toHaveLength(1);
   });
 });

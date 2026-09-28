@@ -30,13 +30,16 @@ export function TaskItem({ task, overdueDays, onToggle, onRename, onDelete }: Pr
   }
 
   return (
-    <div className="group flex items-center gap-3 px-4 py-2.5">
+    <div className="group flex items-center gap-3 rounded-xl px-3 py-2 transition hover:bg-surface2">
       <button
         onClick={() => onToggle?.(task)}
         aria-label={done ? '완료 해제' : '완료'}
-        className="shrink-0 text-muted"
+        className={cn(
+          'shrink-0 transition',
+          done ? 'text-accent' : 'text-muted hover:text-accent'
+        )}
       >
-        {done ? <CheckCircle2 className="size-5 text-accent" /> : <Circle className="size-5" />}
+        {done ? <CheckCircle2 className="size-5" /> : <Circle className="size-5" />}
       </button>
 
       {editing ? (
@@ -46,14 +49,14 @@ export function TaskItem({ task, overdueDays, onToggle, onRename, onDelete }: Pr
           onChange={(e) => setDraft(e.target.value)}
           onBlur={commit}
           onKeyDown={(e) => {
-            if (e.key === 'Enter') commit();
+            if (e.key === 'Enter' && !e.nativeEvent.isComposing) commit();
             if (e.key === 'Escape') {
               setDraft(task.title);
               setEditing(false);
             }
           }}
           aria-label="할 일 수정"
-          className="min-w-0 flex-1 rounded bg-bg px-1.5 py-0.5 text-sm outline-none"
+          className="min-w-0 flex-1 rounded-lg bg-surface px-2 py-1 text-sm outline-none ring-1 ring-accent"
         />
       ) : (
         <button
@@ -68,13 +71,15 @@ export function TaskItem({ task, overdueDays, onToggle, onRename, onDelete }: Pr
       )}
 
       {overdueDays != null && overdueDays > 0 && (
-        <span className="shrink-0 text-xs text-muted">· {overdueDays}일</span>
+        <span className="shrink-0 rounded-full bg-overdueBg px-2 py-0.5 text-[11px] font-medium text-overdueFg">
+          {overdueDays}일 지남
+        </span>
       )}
 
       <button
         onClick={() => onDelete?.(task)}
         aria-label="삭제"
-        className="shrink-0 text-muted transition hover:text-text"
+        className="shrink-0 rounded-md p-1 text-muted opacity-0 transition hover:text-red-500 focus-visible:opacity-100 group-hover:opacity-100 max-md:opacity-100"
       >
         <X className="size-4" />
       </button>
