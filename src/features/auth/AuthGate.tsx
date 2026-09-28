@@ -1,0 +1,33 @@
+import type { ReactNode } from 'react';
+import { useAuth } from './useAuth';
+
+/** 세션이 확보되면 children을 렌더. 로딩/설정 안내 화면 담당. */
+export function AuthGate({ children }: { children: ReactNode }) {
+  const { session, loading, error } = useAuth();
+
+  if (loading) {
+    return (
+      <div className="flex h-full items-center justify-center text-muted">불러오는 중…</div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="mx-auto flex h-full max-w-md flex-col items-center justify-center gap-3 px-6 text-center">
+        <p className="text-lg font-semibold">연결이 필요합니다</p>
+        <p className="text-sm text-muted">{error}</p>
+        <p className="text-xs text-muted">
+          자세한 설정은 <code>.env.example</code>과 <code>SPEC.md</code>를 참고하세요.
+        </p>
+      </div>
+    );
+  }
+
+  if (!session) {
+    return (
+      <div className="flex h-full items-center justify-center text-muted">세션이 없습니다.</div>
+    );
+  }
+
+  return <>{children}</>;
+}

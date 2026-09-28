@@ -1,0 +1,38 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --bg: #f7f7f8;
+  --surface: #ffffff;
+  --border: #e6e6e9;
+  --text: #1a1a1e;
+  --muted: #8a8a94;
+  --accent: #2f6df6;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0f0f11;
+    --surface: #1a1a1e;
+    --border: #2a2a30;
+    --text: #f2f2f5;
+    --muted: #8a8a94;
+    --accent: #5b8dff;
+  }
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  -webkit-font-smoothing: antialiased;
+  font-family:
+    -apple-system, BlinkMacSystemFont, 'Pretendard', 'Apple SD Gothic Neo', 'Segoe UI', sans-serif;
+}
