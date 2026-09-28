@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { ALL_TAB, type Space } from '@/db/types';
-import { nextSpacePosition, resolveActiveTab, targetSpaceId } from './spaceSelection';
+import { moveItem, nextSpacePosition, resolveActiveTab, targetSpaceId } from './spaceSelection';
 
 function makeSpace(partial: Partial<Space> & { id: string }): Space {
   return {
@@ -67,5 +67,26 @@ describe('nextSpacePosition', () => {
 
   it('공간이 없으면 1', () => {
     expect(nextSpacePosition([])).toBe('0000000001');
+  });
+});
+
+describe('moveItem', () => {
+  it('한 칸 위로 이동', () => {
+    expect(moveItem(['a', 'b', 'c'], 1, 0)).toEqual(['b', 'a', 'c']);
+  });
+
+  it('한 칸 아래로 이동', () => {
+    expect(moveItem(['a', 'b', 'c'], 1, 2)).toEqual(['a', 'c', 'b']);
+  });
+
+  it('범위를 벗어나면 순서 변화 없음', () => {
+    expect(moveItem(['a', 'b'], 0, -1)).toEqual(['a', 'b']);
+    expect(moveItem(['a', 'b'], 1, 2)).toEqual(['a', 'b']);
+  });
+
+  it('원본 배열을 변형하지 않는다', () => {
+    const src = ['a', 'b', 'c'];
+    moveItem(src, 0, 2);
+    expect(src).toEqual(['a', 'b', 'c']);
   });
 });

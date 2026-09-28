@@ -18,7 +18,11 @@ export function TaskList() {
   const today = todayStr();
   const isAll = activeTab === ALL_TAB;
 
-  const scoped = isAll ? tasks : tasks.filter((t) => t.spaceId === activeTab);
+  // 전체 탭 상단 카운트는 현존 공간의 할 일만 센다 (삭제된 공간의 고아 태스크 제외 → 공간별 묶음과 합계 일치)
+  const spaceIds = new Set(spaces.map((s) => s.id));
+  const scoped = isAll
+    ? tasks.filter((t) => spaceIds.has(t.spaceId))
+    : tasks.filter((t) => t.spaceId === activeTab);
   const sections = deriveSections(scoped, viewedDate, today);
   const count = completionCount(sections); // 상단 진행률: 전체 합산(또는 단일 공간)
   const isEmpty = count.total === 0;

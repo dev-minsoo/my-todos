@@ -3,6 +3,7 @@ import { QueryProvider } from '@/providers/QueryProvider';
 import { AuthGate } from '@/features/auth/AuthGate';
 import { SpaceSidebar } from '@/features/spaces/SpaceSidebar';
 import { SpaceTabs } from '@/features/spaces/SpaceTabs';
+import { SpacesManagerModal } from '@/features/spaces/SpacesManagerModal';
 import { DayHeader } from '@/features/day/DayHeader';
 import { TaskList } from '@/features/tasks/TaskList';
 import { TaskInput } from '@/features/tasks/TaskInput';
@@ -41,6 +42,9 @@ export default function App() {
               </div>
             </main>
           </div>
+
+          {/* 데스크톱·모바일 공용 공간 관리 모달 (사이드바/상단 탭에서 연다) */}
+          <SpacesManagerModal />
         </div>
       </AuthGate>
     </QueryProvider>

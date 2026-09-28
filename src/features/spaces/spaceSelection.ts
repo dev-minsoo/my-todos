@@ -33,3 +33,31 @@ export function nextSpacePosition(spaces: Space[]): string {
   const max = spaces.reduce((m, s) => Math.max(m, Number(s.position) || 0), 0);
   return String(max + 1).padStart(10, '0');
 }
+
+/** position 문자열(0-패딩 정수). 순서 재배치 시 1..n으로 정규화할 때 쓴다. */
+export function positionAt(index: number): string {
+  return String(index + 1).padStart(10, '0');
+}
+
+/** 공간 포인트 컬러 팔레트 (추가·수정 시 기본값과 색 선택 스와치). */
+export const SPACE_PALETTE = [
+  '#4f46e5',
+  '#2f6df6',
+  '#0ea5e9',
+  '#2fa36b',
+  '#d9a441',
+  '#e0663b',
+  '#e05a8a',
+  '#a855f7',
+];
+
+/** 배열에서 from 위치 항목을 to 위치로 옮긴 새 배열. 범위를 벗어나면 원본을 복제해 그대로 반환. */
+export function moveItem<T>(arr: T[], from: number, to: number): T[] {
+  if (from < 0 || from >= arr.length || to < 0 || to >= arr.length || from === to) {
+    return arr.slice();
+  }
+  const next = arr.slice();
+  const [item] = next.splice(from, 1);
+  next.splice(to, 0, item);
+  return next;
+}
