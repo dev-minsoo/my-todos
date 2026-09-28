@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import { Settings, Settings2, Trash2 } from 'lucide-react';
+import { CalendarDays, Settings, Settings2, Trash2 } from 'lucide-react';
 import { ALL_TAB } from '@/db/types';
 import { useUiStore } from '@/store/uiStore';
 import { cn } from '@/lib/utils';
@@ -34,6 +34,13 @@ export function SpaceTabs() {
         ))}
       </div>
 
+      <button
+        className="shrink-0 rounded-full p-2 text-muted transition hover:bg-surface2 hover:text-text"
+        aria-label="기록"
+        onClick={() => setView('calendar')}
+      >
+        <CalendarDays className="size-4" />
+      </button>
       <button
         className="shrink-0 rounded-full p-2 text-muted transition hover:bg-surface2 hover:text-text"
         aria-label="공간 관리"

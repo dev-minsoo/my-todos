@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
 import {
+  CalendarDays,
   Check,
   Layers,
   PanelLeftClose,
@@ -120,10 +121,13 @@ export function SpaceSidebar() {
         )}
       </nav>
 
-      {/* 푸터: 설정·휴지통 (별도 페이지로 이동) */}
+      {/* 푸터: 기록·설정·휴지통 (별도 페이지로 이동) */}
       <div className={cn('border-t border-border py-3', collapsed ? 'flex flex-col items-center gap-1 px-2' : 'space-y-0.5 px-3')}>
         {collapsed ? (
           <>
+            <RailButton label="기록" active={activeView === 'calendar'} onClick={() => setView('calendar')}>
+              <CalendarDays className="size-4" />
+            </RailButton>
             <RailButton label="설정" active={activeView === 'settings'} onClick={() => setView('settings')}>
               <Settings className="size-4" />
             </RailButton>
@@ -133,6 +137,10 @@ export function SpaceSidebar() {
           </>
         ) : (
           <>
+            <NavItem active={activeView === 'calendar'} onClick={() => setView('calendar')}>
+              <CalendarDays className="size-4 shrink-0 text-muted" />
+              <span>기록</span>
+            </NavItem>
             <NavItem active={activeView === 'settings'} onClick={() => setView('settings')}>
               <Settings className="size-4 shrink-0 text-muted" />
               <span>설정</span>
