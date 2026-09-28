@@ -9,6 +9,7 @@ import { SPACE_PALETTE, moveItem } from './spaceSelection';
 
 export function SpacesManagerModal() {
   const open = useUiStore((s) => s.spacesManagerOpen);
+  const startAddOpen = useUiStore((s) => s.spacesManagerAddOpen);
   const close = useUiStore((s) => s.closeSpacesManager);
   const { spaces, addSpace, updateSpace, deleteSpace, reorderSpaces } = useSpaces();
 
@@ -35,6 +36,8 @@ export function SpacesManagerModal() {
       </ul>
 
       <AddSection
+        modalOpen={open}
+        startOpen={startAddOpen}
         defaultColor={SPACE_PALETTE[spaces.length % SPACE_PALETTE.length]}
         onAdd={(name, color) => addSpace({ name, color })}
       />
@@ -135,15 +138,30 @@ function SpaceRow({
 }
 
 function AddSection({
+  modalOpen,
+  startOpen,
   defaultColor,
   onAdd,
 }: {
+  modalOpen: boolean;
+  startOpen: boolean;
   defaultColor: string;
   onAdd: (name: string, color: string) => void;
 }) {
   const [open, setOpen] = useState(false);
   const [name, setName] = useState('');
   const [color, setColor] = useState(defaultColor);
+
+  // 모달이 열릴 때마다 '공간 추가' 버튼으로 열었으면 폼을 펼친 채로, ⚙로 열었으면 접은 채로 시작
+  useEffect(() => {
+    if (modalOpen) {
+      setOpen(startOpen);
+      setName('');
+      setColor(defaultColor);
+    }
+    // defaultColor는 목록 길이에 따라 바뀔 수 있어 의존성에서 제외 — 모달 열림 시점 값만 쓴다
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [modalOpen, startOpen]);
 
   function reset() {
     setName('');

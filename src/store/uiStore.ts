@@ -6,6 +6,9 @@ import { addDaysStr, todayStr } from '@/domain/dayBoundary';
 /** 테마 선택: 시스템 따름 / 라이트 강제 / 다크 강제 */
 export type Theme = 'system' | 'light' | 'dark';
 
+/** 본문에 표시할 화면 (하루 / 설정 / 휴지통) */
+export type AppView = 'day' | 'settings' | 'trash';
+
 type UiState = {
   /** 현재 탭 (전체 또는 공간 id) */
   currentTab: TabId;
@@ -17,8 +20,12 @@ type UiState = {
   theme: Theme;
   /** 데스크톱 사이드바 접힘 여부 (아이콘 레일) */
   sidebarCollapsed: boolean;
+  /** 지금 보는 화면 (세션 한정 — 항상 하루 화면으로 시작) */
+  activeView: AppView;
   /** 공간 관리 모달 열림 여부 (세션 한정 — 저장 안 함) */
   spacesManagerOpen: boolean;
+  /** 모달을 열 때 '새 공간 추가' 폼을 펼친 채로 시작할지 (추가 버튼으로 열면 true) */
+  spacesManagerAddOpen: boolean;
 
   setCurrentTab: (t: TabId) => void;
   setViewedDate: (d: string) => void;
@@ -27,7 +34,8 @@ type UiState = {
   setLastSpaceId: (id: string) => void;
   setTheme: (t: Theme) => void;
   toggleSidebar: () => void;
-  openSpacesManager: () => void;
+  setView: (v: AppView) => void;
+  openSpacesManager: (options?: { add?: boolean }) => void;
   closeSpacesManager: () => void;
 };
 
@@ -39,7 +47,9 @@ export const useUiStore = create<UiState>()(
       lastSpaceId: null,
       theme: 'system',
       sidebarCollapsed: false,
+      activeView: 'day',
       spacesManagerOpen: false,
+      spacesManagerAddOpen: false,
 
       setCurrentTab: (t) => set({ currentTab: t }),
       setViewedDate: (d) => set({ viewedDate: d }),
@@ -48,12 +58,14 @@ export const useUiStore = create<UiState>()(
       setLastSpaceId: (id) => set({ lastSpaceId: id }),
       setTheme: (t) => set({ theme: t }),
       toggleSidebar: () => set((s) => ({ sidebarCollapsed: !s.sidebarCollapsed })),
-      openSpacesManager: () => set({ spacesManagerOpen: true }),
+      setView: (v) => set({ activeView: v }),
+      openSpacesManager: (options) =>
+        set({ spacesManagerOpen: true, spacesManagerAddOpen: !!options?.add }),
       closeSpacesManager: () => set({ spacesManagerOpen: false }),
     }),
     {
       name: 'tick-ui',
-      // viewedDate·spacesManagerOpen은 저장하지 않는다 → 열 때마다 오늘/모달 닫힘 상태로 시작
+      // viewedDate·activeView·모달 상태는 저장하지 않는다 → 열 때마다 오늘·하루 화면으로 시작
       partialize: (s) => ({
         currentTab: s.currentTab,
         lastSpaceId: s.lastSpaceId,

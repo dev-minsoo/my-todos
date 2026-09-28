@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import { Settings2 } from 'lucide-react';
+import { Settings, Settings2, Trash2 } from 'lucide-react';
 import { ALL_TAB } from '@/db/types';
 import { useUiStore } from '@/store/uiStore';
 import { cn } from '@/lib/utils';
@@ -8,6 +8,7 @@ import { useActiveTab } from './useActiveTab';
 export function SpaceTabs() {
   const setCurrentTab = useUiStore((s) => s.setCurrentTab);
   const openManager = useUiStore((s) => s.openSpacesManager);
+  const setView = useUiStore((s) => s.setView);
   const { activeTab, spaces } = useActiveTab();
 
   // 공간이 2개 이상일 때만 "전체" 탭을 보인다 (SPEC §5)
@@ -36,9 +37,23 @@ export function SpaceTabs() {
       <button
         className="shrink-0 rounded-full p-2 text-muted transition hover:bg-surface2 hover:text-text"
         aria-label="공간 관리"
-        onClick={openManager}
+        onClick={() => openManager()}
       >
         <Settings2 className="size-4" />
+      </button>
+      <button
+        className="shrink-0 rounded-full p-2 text-muted transition hover:bg-surface2 hover:text-text"
+        aria-label="휴지통"
+        onClick={() => setView('trash')}
+      >
+        <Trash2 className="size-4" />
+      </button>
+      <button
+        className="shrink-0 rounded-full p-2 text-muted transition hover:bg-surface2 hover:text-text"
+        aria-label="설정"
+        onClick={() => setView('settings')}
+      >
+        <Settings className="size-4" />
       </button>
     </div>
   );

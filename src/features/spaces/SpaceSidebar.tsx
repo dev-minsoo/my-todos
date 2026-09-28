@@ -1,20 +1,38 @@
 import type { ReactNode } from 'react';
-import { Check, Layers, PanelLeftClose, PanelLeftOpen, Plus, Settings2 } from 'lucide-react';
+import {
+  Check,
+  Layers,
+  PanelLeftClose,
+  PanelLeftOpen,
+  Plus,
+  Settings,
+  Settings2,
+  Trash2,
+} from 'lucide-react';
 import { ALL_TAB } from '@/db/types';
 import { useUiStore } from '@/store/uiStore';
 import { cn } from '@/lib/utils';
 import { useActiveTab } from './useActiveTab';
-import { SettingsMenu } from '@/features/settings/SettingsMenu';
 
 export function SpaceSidebar() {
   const setCurrentTab = useUiStore((s) => s.setCurrentTab);
   const collapsed = useUiStore((s) => s.sidebarCollapsed);
   const toggleSidebar = useUiStore((s) => s.toggleSidebar);
   const openManager = useUiStore((s) => s.openSpacesManager);
+  const setView = useUiStore((s) => s.setView);
+  const activeView = useUiStore((s) => s.activeView);
   const { activeTab, spaces } = useActiveTab();
+
+  const onDay = activeView === 'day';
 
   // 공간이 2개 이상일 때만 "전체"를 보인다 (SPEC §5)
   const showAll = spaces.length >= 2;
+
+  // 공간·전체 선택은 언제나 하루 화면으로 돌아간다
+  const selectTab = (tab: string) => {
+    setCurrentTab(tab);
+    setView('day');
+  };
 
   return (
     <aside
@@ -46,7 +64,7 @@ export function SpaceSidebar() {
         {collapsed ? (
           <div className="flex flex-col items-center gap-1">
             {showAll && (
-              <RailButton label="전체" active={activeTab === ALL_TAB} onClick={() => setCurrentTab(ALL_TAB)}>
+              <RailButton label="전체" active={onDay && activeTab === ALL_TAB} onClick={() => selectTab(ALL_TAB)}>
                 <Layers className="size-4 text-muted" />
               </RailButton>
             )}
@@ -54,13 +72,13 @@ export function SpaceSidebar() {
               <RailButton
                 key={sp.id}
                 label={sp.name}
-                active={activeTab === sp.id}
-                onClick={() => setCurrentTab(sp.id)}
+                active={onDay && activeTab === sp.id}
+                onClick={() => selectTab(sp.id)}
               >
                 <span className="size-3 rounded-full" style={{ background: sp.color }} />
               </RailButton>
             ))}
-            <RailButton label="공간 관리" onClick={openManager}>
+            <RailButton label="공간 추가" onClick={() => openManager({ add: true })}>
               <Plus className="size-4" />
             </RailButton>
           </div>
@@ -69,7 +87,7 @@ export function SpaceSidebar() {
             <div className="flex items-center justify-between px-3 pb-1.5 pt-2">
               <span className="text-xs font-medium uppercase tracking-wide text-muted">공간</span>
               <button
-                onClick={openManager}
+                onClick={() => openManager()}
                 aria-label="공간 관리"
                 className="grid size-6 place-items-center rounded-md text-muted transition hover:bg-surface2 hover:text-text"
               >
@@ -78,21 +96,21 @@ export function SpaceSidebar() {
             </div>
 
             {showAll && (
-              <NavItem active={activeTab === ALL_TAB} onClick={() => setCurrentTab(ALL_TAB)}>
+              <NavItem active={onDay && activeTab === ALL_TAB} onClick={() => selectTab(ALL_TAB)}>
                 <Layers className="size-4 shrink-0 text-muted" />
                 <span>전체</span>
               </NavItem>
             )}
 
             {spaces.map((sp) => (
-              <NavItem key={sp.id} active={activeTab === sp.id} onClick={() => setCurrentTab(sp.id)}>
+              <NavItem key={sp.id} active={onDay && activeTab === sp.id} onClick={() => selectTab(sp.id)}>
                 <span className="size-2.5 shrink-0 rounded-full" style={{ background: sp.color }} aria-hidden />
                 <span className="truncate">{sp.name}</span>
               </NavItem>
             ))}
 
             <button
-              onClick={openManager}
+              onClick={() => openManager({ add: true })}
               className="mt-1 flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-sm text-muted transition hover:bg-surface2 hover:text-text"
             >
               <Plus className="size-4 shrink-0" />
@@ -102,7 +120,30 @@ export function SpaceSidebar() {
         )}
       </nav>
 
-      <SettingsMenu collapsed={collapsed} />
+      {/* 푸터: 설정·휴지통 (별도 페이지로 이동) */}
+      <div className={cn('border-t border-border py-3', collapsed ? 'flex flex-col items-center gap-1 px-2' : 'space-y-0.5 px-3')}>
+        {collapsed ? (
+          <>
+            <RailButton label="설정" active={activeView === 'settings'} onClick={() => setView('settings')}>
+              <Settings className="size-4" />
+            </RailButton>
+            <RailButton label="휴지통" active={activeView === 'trash'} onClick={() => setView('trash')}>
+              <Trash2 className="size-4" />
+            </RailButton>
+          </>
+        ) : (
+          <>
+            <NavItem active={activeView === 'settings'} onClick={() => setView('settings')}>
+              <Settings className="size-4 shrink-0 text-muted" />
+              <span>설정</span>
+            </NavItem>
+            <NavItem active={activeView === 'trash'} onClick={() => setView('trash')}>
+              <Trash2 className="size-4 shrink-0 text-muted" />
+              <span>휴지통</span>
+            </NavItem>
+          </>
+        )}
+      </div>
     </aside>
   );
 }
