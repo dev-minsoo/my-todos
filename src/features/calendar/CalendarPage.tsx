@@ -1,13 +1,14 @@
 import { useState } from 'react';
-import { format, getDay, isSameMonth, parseISO } from 'date-fns';
+import { format, getDay, getMonth, isSameMonth, parseISO } from 'date-fns';
 import { ko } from 'date-fns/locale';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { useUiStore } from '@/store/uiStore';
 import { cn } from '@/lib/utils';
 import { todayStr } from '@/domain/dayBoundary';
 import {
-  completedSpaceIds,
   dayStat,
+  daySpaceStates,
+  grassGridWeeks,
   monthGridDays,
   shiftMonth,
   shiftWeek,
@@ -19,8 +20,10 @@ import { useTasks } from '@/features/tasks/useTasks';
 import { useActiveTab } from '@/features/spaces/useActiveTab';
 
 const WEEKDAYS = ['일', '월', '화', '수', '목', '금', '토'];
-type Mode = 'month' | 'week';
-type SpaceDot = { id: string; color: string };
+const GRASS_WEEKS = 26; // 약 6개월
+type Mode = 'month' | 'week' | 'grass';
+/** 공간 인디케이터: done=true → 꽉 찬 점(완료), false → 빈 점(할일만) */
+type SpaceDot = { id: string; color: string; done: boolean };
 
 export function CalendarPage() {
   const setViewedDate = useUiStore((s) => s.setViewedDate);
@@ -38,26 +41,31 @@ export function CalendarPage() {
   const spaceIds = new Set(spaces.map((s) => s.id));
   const scoped = tasks.filter((t) => spaceIds.has(t.spaceId));
 
-  const days = mode === 'month' ? monthGridDays(anchor) : weekGridDays(anchor);
   const stat = (d: string) => dayStat(scoped, d, today);
 
-  // 그날 완료한 공간들을 색 점으로 (공간 정렬 순서 유지) — 항상 표시
+  // 그날 공간별 상태를 색 점으로 (공간 정렬 순서 유지) — 완료=꽉 찬 점, 할일만=빈 점
   const dotsOf = (d: string): SpaceDot[] => {
-    const done = new Set(completedSpaceIds(scoped, d));
-    return spaces.filter((s) => done.has(s.id)).map((s) => ({ id: s.id, color: s.color }));
+    const byId = new Map(daySpaceStates(scoped, d, today).map((st) => [st.spaceId, st]));
+    return spaces
+      .filter((s) => byId.has(s.id))
+      .map((s) => ({ id: s.id, color: s.color, done: byId.get(s.id)!.done }));
   };
 
   const shift = (delta: number) =>
     setAnchor((a) => (mode === 'month' ? shiftMonth(a, delta) : shiftWeek(a, delta)));
 
+  const days = mode === 'week' ? weekGridDays(anchor) : mode === 'month' ? monthGridDays(anchor) : [];
+
   const label =
-    mode === 'month'
-      ? format(parseISO(anchor), 'yyyy년 M월', { locale: ko })
-      : `${format(parseISO(days[0]), 'M월 d일', { locale: ko })} – ${format(
-          parseISO(days[6]),
-          'M월 d일',
-          { locale: ko }
-        )}`;
+    mode === 'grass'
+      ? ''
+      : mode === 'month'
+        ? format(parseISO(anchor), 'yyyy년 M월', { locale: ko })
+        : `${format(parseISO(days[0]), 'M월 d일', { locale: ko })} – ${format(
+            parseISO(days[6]),
+            'M월 d일',
+            { locale: ko }
+          )}`;
 
   const openDay = (date: string) => {
     setViewedDate(date);
@@ -70,7 +78,7 @@ export function CalendarPage() {
 
       <div className="min-h-0 flex-1 overflow-y-auto px-4 py-6 md:px-8 md:py-8">
         <div className="mx-auto w-full max-w-2xl">
-          {/* 컨트롤: 월/주 토글 + 기간 이동 */}
+          {/* 컨트롤: 월/주/잔디 토글 + 기간 이동 */}
           <div className="mb-5 flex items-center justify-between gap-3">
             <div className="flex items-center gap-1 rounded-full bg-surface2 p-1">
               <ModeButton active={mode === 'month'} onClick={() => setMode('month')}>
@@ -79,28 +87,35 @@ export function CalendarPage() {
               <ModeButton active={mode === 'week'} onClick={() => setMode('week')}>
                 주
               </ModeButton>
+              <ModeButton active={mode === 'grass'} onClick={() => setMode('grass')}>
+                잔디
+              </ModeButton>
             </div>
 
-            <div className="flex items-center gap-2">
-              <span className="text-sm font-medium">{label}</span>
-              <div className="flex items-center gap-0.5 rounded-full border border-border bg-surface p-1">
-                <NavBtn label="이전" onClick={() => shift(-1)}>
-                  <ChevronLeft className="size-4" />
-                </NavBtn>
-                <button
-                  onClick={() => setAnchor(today)}
-                  className="rounded-full px-2.5 py-1 text-xs font-medium text-text transition hover:bg-surface2"
-                >
-                  오늘
-                </button>
-                <NavBtn label="다음" onClick={() => shift(1)}>
-                  <ChevronRight className="size-4" />
-                </NavBtn>
+            {mode === 'grass' ? (
+              <span className="text-sm text-muted">최근 6개월</span>
+            ) : (
+              <div className="flex items-center gap-2">
+                <span className="text-sm font-medium">{label}</span>
+                <div className="flex items-center gap-0.5 rounded-full border border-border bg-surface p-1">
+                  <NavBtn label="이전" onClick={() => shift(-1)}>
+                    <ChevronLeft className="size-4" />
+                  </NavBtn>
+                  <button
+                    onClick={() => setAnchor(today)}
+                    className="rounded-full px-2.5 py-1 text-xs font-medium text-text transition hover:bg-surface2"
+                  >
+                    오늘
+                  </button>
+                  <NavBtn label="다음" onClick={() => shift(1)}>
+                    <ChevronRight className="size-4" />
+                  </NavBtn>
+                </div>
               </div>
-            </div>
+            )}
           </div>
 
-          {mode === 'month' ? (
+          {mode === 'month' && (
             <MonthGrid
               days={days}
               anchor={anchor}
@@ -109,9 +124,15 @@ export function CalendarPage() {
               dots={dotsOf}
               onOpen={openDay}
             />
-          ) : (
+          )}
+          {mode === 'week' && (
             <WeekList days={days} today={today} stat={stat} dots={dotsOf} onOpen={openDay} />
           )}
+          {mode === 'grass' && (
+            <GrassGrid weeks={grassGridWeeks(today, GRASS_WEEKS)} today={today} stat={stat} onOpen={openDay} />
+          )}
+
+          {mode !== 'grass' && <DotLegend />}
         </div>
       </div>
     </div>
@@ -125,6 +146,32 @@ function heatPct(s: DayStat): number {
   if (s.rate >= 0.66) return 70;
   if (s.rate >= 0.34) return 45;
   return 18;
+}
+
+/** 공간 점 하나: 완료가 있으면 꽉 참, 할일만 있으면 테두리만(빈 점) */
+function Dot({ color, done, size }: { color: string; done: boolean; size: 'sm' | 'md' }) {
+  return (
+    <span
+      className={cn('rounded-full', size === 'sm' ? 'size-1.5' : 'size-2')}
+      style={done ? { background: color } : { boxShadow: `inset 0 0 0 1.5px ${color}` }}
+    />
+  );
+}
+
+/** 점 의미 범례 */
+function DotLegend() {
+  return (
+    <div className="mt-4 flex items-center justify-center gap-4 text-xs text-muted">
+      <span className="flex items-center gap-1.5">
+        <span className="size-2 rounded-full" style={{ background: 'var(--accent)' }} />
+        완료
+      </span>
+      <span className="flex items-center gap-1.5">
+        <span className="size-2 rounded-full" style={{ boxShadow: 'inset 0 0 0 1.5px var(--accent)' }} />
+        할 일만
+      </span>
+    </div>
+  );
 }
 
 function MonthGrid({
@@ -214,7 +261,7 @@ function DayCell({
       {shownDots.length > 0 && (
         <span className="flex items-center gap-0.5" aria-hidden>
           {shownDots.map((dot) => (
-            <span key={dot.id} className="size-1.5 rounded-full" style={{ background: dot.color }} />
+            <Dot key={dot.id} color={dot.color} done={dot.done} size="sm" />
           ))}
           {extra > 0 && (
             <span className={cn('text-[9px] leading-none', dark ? 'text-white/80' : 'text-muted')}>
@@ -281,7 +328,7 @@ function WeekList({
             {shownDots.length > 0 && (
               <span className="flex shrink-0 items-center gap-1" aria-hidden>
                 {shownDots.map((dot) => (
-                  <span key={dot.id} className="size-2 rounded-full" style={{ background: dot.color }} />
+                  <Dot key={dot.id} color={dot.color} done={dot.done} size="md" />
                 ))}
                 {extra > 0 && <span className="text-[10px] text-muted">+{extra}</span>}
               </span>
@@ -293,6 +340,116 @@ function WeekList({
         );
       })}
     </div>
+  );
+}
+
+/** 잔디(기여 그래프): 요일(행) × 주(열) 작은 사각형, 완료율에 따라 진해진다 */
+function GrassGrid({
+  weeks,
+  today,
+  stat,
+  onOpen,
+}: {
+  weeks: string[][];
+  today: string;
+  stat: (d: string) => DayStat;
+  onOpen: (d: string) => void;
+}) {
+  // 달이 바뀌는 첫 열에만 월 라벨을 단다
+  const monthLabels = weeks.map((col, i) => {
+    const m = getMonth(parseISO(col[0]));
+    const prev = i > 0 ? getMonth(parseISO(weeks[i - 1][0])) : -1;
+    return m !== prev ? format(parseISO(col[0]), 'M월', { locale: ko }) : '';
+  });
+
+  return (
+    <div className="overflow-x-auto pb-1">
+      <div className="inline-block">
+        {/* 월 라벨 */}
+        <div className="flex gap-1">
+          <div className="w-6 shrink-0" />
+          {monthLabels.map((m, i) => (
+            <div key={i} className="relative h-4 w-3 shrink-0">
+              {m && (
+                <span className="absolute left-0 top-0 whitespace-nowrap text-[10px] leading-none text-muted">
+                  {m}
+                </span>
+              )}
+            </div>
+          ))}
+        </div>
+
+        {/* 요일 라벨 + 주 열들 */}
+        <div className="flex gap-1">
+          <div className="flex w-6 shrink-0 flex-col gap-1">
+            {WEEKDAYS.map((w, r) => (
+              <div key={w} className="flex size-3 items-center justify-end text-[10px] leading-none text-muted">
+                {r % 2 === 1 ? w : ''}
+              </div>
+            ))}
+          </div>
+          {weeks.map((col, i) => (
+            <div key={i} className="flex shrink-0 flex-col gap-1">
+              {col.map((d) => (
+                <GrassCell key={d} date={d} stat={stat(d)} today={today} onOpen={onOpen} />
+              ))}
+            </div>
+          ))}
+        </div>
+
+        {/* 범례 */}
+        <div className="mt-3 flex items-center gap-1.5 pl-7 text-[10px] text-muted">
+          <span>적음</span>
+          {[0, 18, 45, 70, 100].map((p) => (
+            <span
+              key={p}
+              className="size-3 rounded-[3px] bg-surface2"
+              style={
+                p > 0
+                  ? { backgroundColor: `color-mix(in srgb, var(--accent) ${p}%, transparent)` }
+                  : undefined
+              }
+            />
+          ))}
+          <span>많음</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function GrassCell({
+  date,
+  stat,
+  today,
+  onOpen,
+}: {
+  date: string;
+  stat: DayStat;
+  today: string;
+  onOpen: (d: string) => void;
+}) {
+  const future = date > today;
+  const pct = heatPct(stat);
+  const title = `${format(parseISO(date), 'M월 d일', { locale: ko })} · ${stat.done}/${stat.total} 완료`;
+  return (
+    <button
+      type="button"
+      disabled={future}
+      onClick={() => onOpen(date)}
+      title={title}
+      aria-label={title}
+      className={cn(
+        'size-3 rounded-[3px] bg-surface2 transition',
+        future ? 'opacity-40' : 'hover:ring-1 hover:ring-accent',
+        date === today && 'ring-1 ring-accent'
+      )}
+      style={
+        pct > 0
+          ? { backgroundColor: `color-mix(in srgb, var(--accent) ${pct}%, transparent)` }
+          : undefined
+      }
+    />
   );
 }
 

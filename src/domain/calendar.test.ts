@@ -3,7 +3,9 @@ import { getDay, parseISO } from 'date-fns';
 import type { Task } from '@/db/types';
 import {
   completedSpaceIds,
+  daySpaceStates,
   dayStat,
+  grassGridWeeks,
   monthGridDays,
   shiftMonth,
   shiftWeek,
@@ -147,5 +149,69 @@ describe('completedSpaceIds', () => {
 
   it('완료가 없으면 빈 배열', () => {
     expect(completedSpaceIds([mkTask({ completedAt: null })], '2026-09-10')).toEqual([]);
+  });
+});
+
+describe('daySpaceStates', () => {
+  const today = '2026-09-28';
+
+  it('완료만 있는 공간은 done=true, todo=false', () => {
+    const tasks = [mkTask({ spaceId: 'a', dueDate: '2026-09-10', completedAt: '2026-09-10T09:00:00' })];
+    expect(daySpaceStates(tasks, '2026-09-10', today)).toEqual([{ spaceId: 'a', done: true, todo: false }]);
+  });
+
+  it('미완료만 있는 공간은 todo=true, done=false', () => {
+    const tasks = [mkTask({ spaceId: 'b', dueDate: '2026-09-10' })];
+    expect(daySpaceStates(tasks, '2026-09-10', today)).toEqual([{ spaceId: 'b', done: false, todo: true }]);
+  });
+
+  it('같은 공간에 완료·미완료가 섞이면 done·todo 둘 다 true', () => {
+    const tasks = [
+      mkTask({ spaceId: 'a', dueDate: '2026-09-10' }),
+      mkTask({ spaceId: 'a', dueDate: '2026-09-10', completedAt: '2026-09-10T12:00:00' }),
+    ];
+    expect(daySpaceStates(tasks, '2026-09-10', today)).toEqual([{ spaceId: 'a', done: true, todo: true }]);
+  });
+
+  it('오늘 화면에서는 넘어온(과거 미완료) 항목도 todo로 잡힌다', () => {
+    const tasks = [mkTask({ spaceId: 'c', dueDate: '2026-09-20' })]; // today(9/28)보다 과거, 미완료
+    expect(daySpaceStates(tasks, today, today)).toEqual([{ spaceId: 'c', done: false, todo: true }]);
+  });
+
+  it('과거 날짜에는 넘어옴이 없어 미완료가 그날 잡히지 않는다', () => {
+    // 9/20 미완료는 9/25를 볼 때 open도 carried도 아니다
+    const tasks = [mkTask({ spaceId: 'c', dueDate: '2026-09-20' })];
+    expect(daySpaceStates(tasks, '2026-09-25', today)).toEqual([]);
+  });
+
+  it('삭제된 항목은 제외한다', () => {
+    const tasks = [mkTask({ spaceId: 'a', dueDate: '2026-09-10', deletedAt: '2026-09-11T00:00:00' })];
+    expect(daySpaceStates(tasks, '2026-09-10', today)).toEqual([]);
+  });
+});
+
+describe('grassGridWeeks', () => {
+  it('N주만큼의 열을 만들고 각 열은 7일이다', () => {
+    const cols = grassGridWeeks('2026-09-28', 26);
+    expect(cols).toHaveLength(26);
+    for (const col of cols) expect(col).toHaveLength(7);
+  });
+
+  it('각 열은 일요일로 시작해 토요일로 끝난다', () => {
+    const cols = grassGridWeeks('2026-09-28', 4);
+    for (const col of cols) {
+      expect(getDay(parseISO(col[0]))).toBe(0);
+      expect(getDay(parseISO(col[6]))).toBe(6);
+    }
+  });
+
+  it('마지막 열은 오늘이 속한 주이고, 오늘을 포함한다', () => {
+    const cols = grassGridWeeks('2026-09-28', 8);
+    expect(cols[cols.length - 1]).toContain('2026-09-28');
+  });
+
+  it('전체가 오름차순으로 연속된 날짜다', () => {
+    const flat = grassGridWeeks('2026-09-28', 12).flat();
+    for (let i = 1; i < flat.length; i++) expect(flat[i] > flat[i - 1]).toBe(true);
   });
 });

@@ -6,6 +6,7 @@ import {
   parseISO,
   startOfMonth,
   startOfWeek,
+  subWeeks,
 } from 'date-fns';
 import type { Task } from '@/db/types';
 import { addDaysStr, completionDay, toDateStr } from './dayBoundary';
@@ -67,4 +68,40 @@ export function completedSpaceIds(tasks: Task[], dateStr: string): string[] {
     if (t.completedAt && completionDay(t.completedAt) === dateStr) ids.add(t.spaceId);
   }
   return [...ids];
+}
+
+/** 그날 어떤 공간에 무엇이 있었는지: 완료(done)가 있었나, 할 일(todo)이 있었나 */
+export type DaySpaceState = { spaceId: string; done: boolean; todo: boolean };
+
+/**
+ * 그 날짜를 하루 화면으로 봤을 때, 공간별로 '완료가 있었는지 / 할 일이 있었는지'를 계산한다.
+ * - done: 그날 완료(completed 섹션)가 하나라도 있는 공간
+ * - todo: 그날 미완료(open + 넘어옴 carried)가 하나라도 있는 공간
+ *   (carried는 하루 화면 규칙상 viewedDate === today일 때만 채워진다)
+ * 한 공간이 done·todo를 동시에 가질 수 있다. 반환 순서·중복 정리는 호출부(공간 정렬)에서 한다.
+ */
+export function daySpaceStates(tasks: Task[], dateStr: string, today: string): DaySpaceState[] {
+  const { carried, open, completed } = deriveSections(tasks, dateStr, today);
+  const doneSet = new Set<string>();
+  const todoSet = new Set<string>();
+  for (const t of completed) doneSet.add(t.spaceId);
+  for (const t of open) todoSet.add(t.spaceId);
+  for (const t of carried) todoSet.add(t.spaceId);
+  const ids = new Set<string>([...doneSet, ...todoSet]);
+  return [...ids].map((spaceId) => ({
+    spaceId,
+    done: doneSet.has(spaceId),
+    todo: todoSet.has(spaceId),
+  }));
+}
+
+/** 잔디(기여 그래프) 한 주 = 일요일부터 7일. 최근 N주를 열로 나열한다. */
+export function grassGridWeeks(anchorToday: string, weeks: number): string[][] {
+  const d = parseISO(anchorToday);
+  const start = startOfWeek(subWeeks(d, weeks - 1), { weekStartsOn: WEEK_STARTS_ON });
+  const end = endOfWeek(d, { weekStartsOn: WEEK_STARTS_ON });
+  const all = eachDayOfInterval({ start, end }).map(toDateStr);
+  const cols: string[][] = [];
+  for (let i = 0; i < all.length; i += 7) cols.push(all.slice(i, i + 7));
+  return cols;
 }
