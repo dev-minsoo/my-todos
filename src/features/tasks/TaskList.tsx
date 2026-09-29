@@ -1,5 +1,11 @@
-import { useState, type ReactNode } from 'react';
-import { AnimatePresence, motion } from 'framer-motion';
+import {
+  useEffect,
+  useRef,
+  useState,
+  type PointerEvent as ReactPointerEvent,
+  type ReactNode,
+} from 'react';
+import { AnimatePresence, motion, Reorder, useDragControls } from 'framer-motion';
 import {
   ArrowDown,
   ArrowUp,
@@ -13,6 +19,7 @@ import {
 import { ALL_TAB, type Group } from '@/db/types';
 import { useUiStore } from '@/store/uiStore';
 import { todayStr } from '@/domain/dayBoundary';
+import { positionBetween } from '@/domain/order';
 import {
   completionCount,
   deriveSections,
@@ -36,7 +43,8 @@ export function TaskList() {
   const viewedDate = useUiStore((s) => s.viewedDate);
 
   const { activeTab, spaces } = useActiveTab();
-  const { tasks, isLoading, toggleTask, renameTask, deleteTask, moveTaskToGroup } = useTasks();
+  const { tasks, isLoading, toggleTask, renameTask, deleteTask, moveTaskToGroup, reorderTask } =
+    useTasks();
   const { groups, renameGroup, deleteGroup, reorderGroups } = useGroups();
 
   const today = todayStr();
@@ -68,6 +76,12 @@ export function TaskList() {
     : [];
 
   const handlers = { onToggle: toggleTask, onRename: renameTask, onDelete: deleteTask };
+
+  // 세로 리오더 커밋: 드롭 위치의 두 이웃 position 사이 키를 계산해 저장한다(due_date 불변).
+  // 단일 공간 뷰(그리고 각 그룹 버킷)의 "할 일"에서만 쓴다. [전체] 탭·완료/넘어옴은 제외.
+  const commitReorder: ReorderCommit = (movedId, before, after) =>
+    reorderTask(movedId, positionBetween(before, after));
+  const reorderCtl = isAll ? undefined : commitReorder;
 
   // 그룹 이동 핸들러 (그룹이 있는 특정 공간에서만 항목에 붙는다).
   // 새 그룹 생성은 목록이 아니라 입력칸 위 대상 그룹 셀렉트에서만 한다 → 여기선 이동만.
@@ -153,6 +167,7 @@ export function TaskList() {
                   onMoveDown={
                     group && idx < spaceGroups.length - 1 ? () => reorderAt(idx, idx + 1) : undefined
                   }
+                  reorder={reorderCtl}
                   {...handlers}
                 />
               );
@@ -164,7 +179,7 @@ export function TaskList() {
         ) : (
           // 특정 공간 + 그룹 없음 + 항목 있음: 평면 렌더(기존)
           <div className="pb-2">
-            <SectionsView sections={sections} {...handlers} />
+            <SectionsView sections={sections} reorder={reorderCtl} {...handlers} />
           </div>
         )}
       </div>
@@ -231,6 +246,7 @@ function GroupSection({
   bucket,
   group,
   moveProps,
+  reorder,
   onToggle,
   onRename,
   onDelete,
@@ -242,6 +258,7 @@ function GroupSection({
   bucket: GroupBucket;
   group: Group | null;
   moveProps: MoveProps;
+  reorder?: ReorderCommit;
   onRenameGroup: (id: string, name: string) => void;
   onDeleteGroup?: () => void;
   onMoveUp?: () => void;
@@ -334,6 +351,7 @@ function GroupSection({
             onRename={onRename}
             onDelete={onDelete}
             moveProps={moveProps}
+            reorder={reorder}
           />
         ))}
     </section>
@@ -369,6 +387,9 @@ function HeaderBtn({
   );
 }
 
+/** 순서 변경 커밋: 옮긴 항목 id와 드롭 위치의 두 이웃 position */
+type ReorderCommit = (movedId: string, before: string | null, after: string | null) => void;
+
 /** 한 묶음(공간/그룹)의 남은 일/할 일/완료 섹션 */
 function SectionsView({
   sections,
@@ -376,7 +397,13 @@ function SectionsView({
   onRename,
   onDelete,
   moveProps,
-}: { sections: DaySections; moveProps?: MoveProps } & SectionHandlers) {
+  reorder,
+}: {
+  sections: DaySections;
+  moveProps?: MoveProps;
+  /** 넘기면 "할 일" 목록을 세로 드래그로 리오더할 수 있다 */
+  reorder?: ReorderCommit;
+} & SectionHandlers) {
   const extra = moveProps
     ? {
         groupOptions: moveProps.groupOptions,
@@ -402,22 +429,34 @@ function SectionsView({
           </AnimatePresence>
         </Section>
       )}
-      {sections.open.length > 0 && (
-        <Section title="할 일">
-          <AnimatePresence initial={false}>
-            {sections.open.map((t) => (
-              <TaskItem
-                key={t.id}
-                task={t}
-                onToggle={onToggle}
-                onRename={onRename}
-                onDelete={onDelete}
-                {...extra}
-              />
-            ))}
-          </AnimatePresence>
-        </Section>
-      )}
+      {sections.open.length > 0 &&
+        (reorder ? (
+          <Section title="할 일">
+            <ReorderList
+              items={sections.open}
+              onCommit={reorder}
+              moveProps={moveProps}
+              onToggle={onToggle}
+              onRename={onRename}
+              onDelete={onDelete}
+            />
+          </Section>
+        ) : (
+          <Section title="할 일">
+            <AnimatePresence initial={false}>
+              {sections.open.map((t) => (
+                <TaskItem
+                  key={t.id}
+                  task={t}
+                  onToggle={onToggle}
+                  onRename={onRename}
+                  onDelete={onDelete}
+                  {...extra}
+                />
+              ))}
+            </AnimatePresence>
+          </Section>
+        ))}
       {/* 완료 섹션은 완료한 항목이 없어도 자리를 유지한다 (그날의 완료 영역이 늘 보이도록) */}
       <Section title="완료">
         {sections.completed.length > 0 ? (
@@ -438,6 +477,100 @@ function SectionsView({
         )}
       </Section>
     </>
+  );
+}
+
+/**
+ * "할 일"(open) 목록의 세로 드래그 리오더.
+ * - framer-motion Reorder로 순서를 즉시 보여주고(로컬 미러), 드롭 시점에 두 이웃 사이 키만 저장.
+ * - Reorder.Item은 dragListener=false — 좌측 GripVertical 핸들에서만 드래그가 시작된다.
+ *   그래서 TaskItem의 가로 스와이프(완료/삭제, drag='x')와 충돌하지 않는다.
+ */
+function ReorderList({
+  items,
+  onCommit,
+  moveProps,
+  onToggle,
+  onRename,
+  onDelete,
+}: {
+  items: Task[];
+  onCommit: ReorderCommit;
+  moveProps?: MoveProps;
+} & SectionHandlers) {
+  const [order, setOrder] = useState<Task[]>(items);
+  const orderRef = useRef(order);
+  orderRef.current = order;
+
+  // 서버(캐시) 순서가 바뀌면 로컬 미러를 맞춘다. 드래그 중엔 items가 그대로라 리셋되지 않는다.
+  const syncKey = items.map((t) => `${t.id}:${t.position}`).join('|');
+  useEffect(() => {
+    setOrder(items);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [syncKey]);
+
+  const commit = (movedId: string) => {
+    const arr = orderRef.current;
+    const i = arr.findIndex((t) => t.id === movedId);
+    if (i < 0) return;
+    const before = arr[i - 1]?.position ?? null;
+    const after = arr[i + 1]?.position ?? null;
+    const cur = arr[i].position;
+    // 순서가 그대로면(이미 이웃 사이에 정렬돼 있으면) 저장하지 않는다 — 클릭/미세 드래그 no-op 방지.
+    if ((before == null || before < cur) && (after == null || cur < after)) return;
+    onCommit(movedId, before, after);
+  };
+
+  return (
+    <Reorder.Group
+      as="div"
+      axis="y"
+      values={order}
+      onReorder={setOrder}
+      className="flex flex-col gap-0.5"
+    >
+      {order.map((task) => (
+        <ReorderRow
+          key={task.id}
+          task={task}
+          onCommit={() => commit(task.id)}
+          moveProps={moveProps}
+          onToggle={onToggle}
+          onRename={onRename}
+          onDelete={onDelete}
+        />
+      ))}
+    </Reorder.Group>
+  );
+}
+
+/** 리오더 목록의 한 행: 핸들에서만 드래그를 시작하고, 드롭되면 새 position을 커밋한다. */
+function ReorderRow({
+  task,
+  onCommit,
+  moveProps,
+  onToggle,
+  onRename,
+  onDelete,
+}: {
+  task: Task;
+  onCommit: () => void;
+  moveProps?: MoveProps;
+} & SectionHandlers) {
+  const controls = useDragControls();
+  return (
+    <Reorder.Item as="div" value={task} dragListener={false} dragControls={controls} onDragEnd={onCommit}>
+      <TaskItem
+        task={task}
+        onToggle={onToggle}
+        onRename={onRename}
+        onDelete={onDelete}
+        groupOptions={moveProps?.groupOptions}
+        onMoveToGroup={moveProps?.onMoveToGroup}
+        dragHandle
+        onDragHandlePointerDown={(e: ReactPointerEvent) => controls.start(e)}
+      />
+    </Reorder.Item>
   );
 }
 

@@ -1,6 +1,6 @@
-import { useState } from 'react';
+import { useState, type PointerEvent as ReactPointerEvent } from 'react';
 import { motion, useMotionValue, useTransform, type PanInfo } from 'framer-motion';
-import { CheckCircle2, Circle, FolderInput, Trash2, X } from 'lucide-react';
+import { CheckCircle2, Circle, FolderInput, GripVertical, Trash2, X } from 'lucide-react';
 import type { Task } from '@/db/types';
 import { cn } from '@/lib/utils';
 import { GroupMovePopover, type GroupOption } from './GroupMovePopover';
@@ -16,6 +16,10 @@ type Props = {
   groupOptions?: GroupOption[];
   onMoveToGroup?: (taskId: string, groupId: string | null) => void;
   onCreateGroupAndMove?: (taskId: string, name: string) => void;
+  /** 세로 리오더용 좌측 핸들을 노출한다 (open 목록에서만) */
+  dragHandle?: boolean;
+  /** 핸들에서 포인터를 누르면 세로 리오더 드래그를 시작한다 (Reorder.Item의 dragControls.start) */
+  onDragHandlePointerDown?: (e: ReactPointerEvent) => void;
 };
 
 // 스와이프 판정 임계: 이동 거리(px) 또는 튕기는 속도(px/s)
@@ -31,6 +35,8 @@ export function TaskItem({
   groupOptions,
   onMoveToGroup,
   onCreateGroupAndMove,
+  dragHandle,
+  onDragHandlePointerDown,
 }: Props) {
   const done = task.completedAt != null;
   const canMove = groupOptions != null && onMoveToGroup != null;
@@ -97,6 +103,24 @@ export function TaskItem({
         onDragEnd={handleDragEnd}
         className="group relative flex items-center gap-3 rounded-xl bg-surface px-3 py-2 transition hover:bg-surface2"
       >
+        {dragHandle && (
+          <button
+            type="button"
+            aria-label="순서 변경"
+            title="끌어서 순서 변경"
+            // 포인터 누름을 여기서 가로채 세로 리오더를 시작한다.
+            // stopPropagation으로 부모의 가로 스와이프(drag='x')가 시작되지 않게 한다.
+            onPointerDown={(e) => {
+              e.stopPropagation();
+              onDragHandlePointerDown?.(e);
+            }}
+            onClick={(e) => e.stopPropagation()}
+            className="-ml-1 shrink-0 cursor-grab touch-none text-muted opacity-0 transition hover:text-text focus-visible:opacity-100 active:cursor-grabbing group-hover:opacity-100 max-md:opacity-100"
+          >
+            <GripVertical className="size-4" />
+          </button>
+        )}
+
         <motion.button
           onClick={() => onToggle?.(task)}
           whileTap={{ scale: 0.8 }}

@@ -18,6 +18,17 @@ const alive = (t: Task) => t.deletedAt == null;
 const byCreatedAsc = (a: Task, b: Task) =>
   a.createdAt < b.createdAt ? -1 : a.createdAt > b.createdAt ? 1 : 0;
 
+/**
+ * 표시 순서: position 사전식 오름차순. position이 없거나(빈 문자열) 동률이면 created_at 폴백.
+ * (position은 fractional index — 드래그 리오더로 두 이웃 사이 키만 바꾼다. §order.ts)
+ */
+const byPosition = (a: Task, b: Task) => {
+  const ap = a.position ?? '';
+  const bp = b.position ?? '';
+  if (ap !== '' && bp !== '' && ap !== bp) return ap < bp ? -1 : 1;
+  return byCreatedAsc(a, b);
+};
+
 const byCompletedDesc = (a: Task, b: Task) => {
   const ac = a.completedAt ?? '';
   const bc = b.completedAt ?? '';
@@ -38,13 +49,13 @@ export function deriveSections(tasks: Task[], viewedDate: string, today: string)
 
   const open = items
     .filter((t) => t.completedAt == null && t.dueDate === viewedDate)
-    .sort(byCreatedAsc);
+    .sort(byPosition);
 
   const carried: CarriedTask[] = isToday
     ? items
         .filter((t) => t.completedAt == null && t.dueDate < today)
         .map((t) => ({ ...t, overdueDays: daysBetween(t.dueDate, today) }))
-        .sort(byCreatedAsc)
+        .sort(byPosition)
     : [];
 
   const completed = items

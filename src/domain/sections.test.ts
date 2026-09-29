@@ -67,6 +67,36 @@ describe('deriveSections (오늘 화면)', () => {
   });
 });
 
+describe('deriveSections 정렬 (position 우선, created_at 폴백)', () => {
+  it('open은 position 사전식 오름차순', () => {
+    const tasks = [
+      makeTask({ dueDate: TODAY, position: 'a2', title: '셋째' }),
+      makeTask({ dueDate: TODAY, position: 'a0', title: '첫째' }),
+      makeTask({ dueDate: TODAY, position: 'a1', title: '둘째' }),
+    ];
+    const s = deriveSections(tasks, TODAY, TODAY);
+    expect(s.open.map((t) => t.title)).toEqual(['첫째', '둘째', '셋째']);
+  });
+
+  it('position이 동률이면 created_at 순으로 폴백', () => {
+    const tasks = [
+      makeTask({ dueDate: TODAY, position: 'a0', createdAt: '2026-09-28T00:00:05', title: '나중' }),
+      makeTask({ dueDate: TODAY, position: 'a0', createdAt: '2026-09-28T00:00:01', title: '먼저' }),
+    ];
+    const s = deriveSections(tasks, TODAY, TODAY);
+    expect(s.open.map((t) => t.title)).toEqual(['먼저', '나중']);
+  });
+
+  it('넘어옴도 position 순으로 정렬된다', () => {
+    const tasks = [
+      makeTask({ dueDate: '2026-09-26', position: 'a1', title: '뒤' }),
+      makeTask({ dueDate: '2026-09-27', position: 'a0', title: '앞' }),
+    ];
+    const s = deriveSections(tasks, TODAY, TODAY);
+    expect(s.carried.map((t) => t.title)).toEqual(['앞', '뒤']);
+  });
+});
+
 describe('deriveSections (지난 날 화면)', () => {
   it('지난 날에는 carried가 없고, 그날 완료 항목만 완료 섹션', () => {
     const viewed = '2026-09-27';
