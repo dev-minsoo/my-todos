@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { ChevronDown, Folder, Plus } from 'lucide-react';
+import { useRef, useState } from 'react';
+import { ArrowUp, ChevronDown, Folder, Plus } from 'lucide-react';
 import { ALL_TAB } from '@/db/types';
 import { useUiStore } from '@/store/uiStore';
 import { NO_GROUP_NAME } from '@/domain/sections';
@@ -15,6 +15,7 @@ const CHIP_CLASS =
 
 export function TaskInput() {
   const [value, setValue] = useState('');
+  const inputRef = useRef<HTMLInputElement>(null);
   const viewedDate = useUiStore((s) => s.viewedDate);
   const lastSpaceId = useUiStore((s) => s.lastSpaceId);
   const setLastSpaceId = useUiStore((s) => s.setLastSpaceId);
@@ -58,7 +59,11 @@ export function TaskInput() {
     addTask({ title, dueDate: viewedDate, spaceId, groupId: targetGroupId });
     setLastSpaceId(spaceId);
     setValue('');
+    // 연속 추가: 버튼 탭으로 등록해도 입력칸에 포커스를 되돌려 바로 다음 항목을 적게 한다.
+    inputRef.current?.focus();
   }
+
+  const canSubmit = !disabled && value.trim().length > 0;
 
   return (
     <div className="border-t border-border p-3">
@@ -112,6 +117,7 @@ export function TaskInput() {
       <div className="flex items-center gap-2 rounded-xl bg-bg px-3 py-2.5 ring-1 ring-transparent transition focus-within:ring-accent">
         <Plus className="size-4 shrink-0 text-muted" />
         <input
+          ref={inputRef}
           value={value}
           onChange={(e) => setValue(e.target.value)}
           onKeyDown={(e) => {
@@ -123,6 +129,17 @@ export function TaskInput() {
           aria-label="할 일 추가"
           className="min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-muted disabled:opacity-50"
         />
+        {/* 우측 전송 버튼: 텍스트가 있으면 나타난다 (모바일에서 Enter 없이 탭으로 등록) */}
+        {canSubmit && (
+          <button
+            type="button"
+            onClick={submit}
+            aria-label="추가"
+            className="grid size-7 shrink-0 place-items-center rounded-lg bg-accent text-accentFg transition hover:opacity-90 active:scale-95"
+          >
+            <ArrowUp className="size-4" />
+          </button>
+        )}
       </div>
     </div>
   );

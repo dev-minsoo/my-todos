@@ -66,7 +66,14 @@ export function TaskItem({
   }
 
   return (
-    <div className="relative overflow-hidden rounded-xl">
+    <motion.div
+      layout
+      initial={{ opacity: 0, y: -6 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0 }}
+      transition={{ duration: 0.18, ease: 'easeOut' }}
+      className="relative overflow-hidden rounded-xl"
+    >
       {/* 뒤 레이어: 스와이프 방향 힌트 (오른쪽=완료, 왼쪽=삭제) */}
       <div
         className="pointer-events-none absolute inset-0 flex items-center justify-between px-4"
@@ -90,8 +97,9 @@ export function TaskItem({
         onDragEnd={handleDragEnd}
         className="group relative flex items-center gap-3 rounded-xl bg-surface px-3 py-2 transition hover:bg-surface2"
       >
-        <button
+        <motion.button
           onClick={() => onToggle?.(task)}
+          whileTap={{ scale: 0.8 }}
           aria-label={done ? '완료 해제' : '완료'}
           className={cn(
             'shrink-0 transition',
@@ -99,7 +107,7 @@ export function TaskItem({
           )}
         >
           {done ? <CheckCircle2 className="size-5" /> : <Circle className="size-5" />}
-        </button>
+        </motion.button>
 
         {editing ? (
           <input
@@ -158,6 +166,6 @@ export function TaskItem({
           <X className="size-4" />
         </button>
       </motion.div>
-    </div>
+    </motion.div>
   );
 }

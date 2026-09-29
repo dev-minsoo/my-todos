@@ -1,5 +1,15 @@
 import { useState, type ReactNode } from 'react';
-import { ArrowDown, ArrowUp, ChevronDown, ChevronRight, Trash2 } from 'lucide-react';
+import { AnimatePresence, motion } from 'framer-motion';
+import {
+  ArrowDown,
+  ArrowUp,
+  CalendarDays,
+  CheckCircle2,
+  ChevronDown,
+  ChevronRight,
+  Feather,
+  Trash2,
+} from 'lucide-react';
 import { ALL_TAB, type Group } from '@/db/types';
 import { useUiStore } from '@/store/uiStore';
 import { todayStr } from '@/domain/dayBoundary';
@@ -42,6 +52,7 @@ export function TaskList() {
   const count = completionCount(sections); // 상단 진행률: 전체 합산(또는 단일 공간)
   const isEmpty = count.total === 0;
   const pct = count.total > 0 ? Math.round((count.done / count.total) * 100) : 0;
+  const allDone = !isEmpty && count.done === count.total; // 오늘 다 끝냈을 때 축하 배너 조건
 
   // 전체 탭에서는 공간별로 묶는다 (SPEC §82)
   const spaceGroupsView = isAll ? groupSectionsBySpace(tasks, spaces, viewedDate, today) : [];
@@ -87,14 +98,15 @@ export function TaskList() {
         </div>
       )}
 
-      <div className="min-h-0 flex-1 overflow-y-auto py-2">
+      <div className="flex min-h-0 flex-1 flex-col overflow-y-auto py-2">
+        {isToday && allDone && <AllDoneBanner total={count.total} />}
         {isLoading && isEmpty ? (
           <div className="flex h-full min-h-40 items-center justify-center text-sm text-muted">
             불러오는 중…
           </div>
         ) : isAll ? (
           isEmpty ? (
-            <EmptyState />
+            <EmptyState isToday={isToday} />
           ) : (
             spaceGroupsView.map((g) => (
               <section key={g.spaceId} className="px-2 pb-1 pt-3 first:pt-1">
@@ -114,7 +126,11 @@ export function TaskList() {
             ))
           )
         ) : hasGroups ? (
-          // 특정 공간 + 그룹 있음: 그룹별 접이식 섹션 + 새 그룹 추가
+          // 특정 공간 + 그룹 있음: 그룹별 접이식 섹션.
+          // 과거 날짜인데 그날 항목이 하나도 없으면(모든 버킷 숨김) 빈 상태를 보여준다.
+          isEmpty && !isToday ? (
+            <EmptyState isToday={isToday} />
+          ) : (
           <div className="pb-2">
             {buckets.map((bucket) => {
               const group = bucket.groupId
@@ -142,8 +158,9 @@ export function TaskList() {
               );
             })}
           </div>
+          )
         ) : isEmpty ? (
-          <EmptyState />
+          <EmptyState isToday={isToday} />
         ) : (
           // 특정 공간 + 그룹 없음 + 항목 있음: 평면 렌더(기존)
           <div className="pb-2">
@@ -155,12 +172,46 @@ export function TaskList() {
   );
 }
 
-function EmptyState() {
+function EmptyState({ isToday }: { isToday: boolean }) {
   return (
-    <div className="flex min-h-40 flex-1 flex-col items-center justify-center px-4 text-center text-sm text-muted">
-      <p>할 일이 없습니다.</p>
-      <p className="mt-1 text-xs">아래에 적어 보세요.</p>
+    <div className="flex min-h-40 flex-1 flex-col items-center justify-center px-4 text-center">
+      {isToday ? (
+        <>
+          <div className="mb-3 grid size-11 place-items-center rounded-full bg-accentSoft text-accent">
+            <Feather className="size-5" />
+          </div>
+          <p className="text-sm font-medium">오늘은 아직 비어 있어요</p>
+          <p className="mt-1 text-xs text-muted">아래에 첫 할 일을 적어 보세요.</p>
+        </>
+      ) : (
+        <>
+          <div className="mb-3 grid size-11 place-items-center rounded-full bg-surface2 text-muted">
+            <CalendarDays className="size-5" />
+          </div>
+          <p className="text-sm text-muted">이 날엔 기록된 할 일이 없어요.</p>
+        </>
+      )}
     </div>
+  );
+}
+
+/** 오늘 할 일을 모두 끝냈을 때의 축하 배너 (오늘 화면에서만) */
+function AllDoneBanner({ total }: { total: number }) {
+  return (
+    <motion.div
+      layout
+      initial={{ opacity: 0, y: -6 }}
+      animate={{ opacity: 1, y: 0 }}
+      className="mx-2 mb-1 mt-1 flex items-center gap-3 rounded-xl bg-accentSoft px-4 py-3"
+    >
+      <span className="grid size-8 shrink-0 place-items-center rounded-full bg-accent text-accentFg">
+        <CheckCircle2 className="size-5" />
+      </span>
+      <div className="min-w-0">
+        <p className="text-sm font-semibold text-accent">오늘 할 일을 다 끝냈어요 🎉</p>
+        <p className="text-xs text-muted">{total}개 모두 완료했습니다.</p>
+      </div>
+    </motion.div>
   );
 }
 
@@ -336,46 +387,52 @@ function SectionsView({
     <>
       {sections.carried.length > 0 && (
         <Section title="남은 일">
-          {sections.carried.map((t) => (
-            <TaskItem
-              key={t.id}
-              task={t}
-              overdueDays={t.overdueDays}
-              onToggle={onToggle}
-              onRename={onRename}
-              onDelete={onDelete}
-              {...extra}
-            />
-          ))}
+          <AnimatePresence initial={false}>
+            {sections.carried.map((t) => (
+              <TaskItem
+                key={t.id}
+                task={t}
+                overdueDays={t.overdueDays}
+                onToggle={onToggle}
+                onRename={onRename}
+                onDelete={onDelete}
+                {...extra}
+              />
+            ))}
+          </AnimatePresence>
         </Section>
       )}
       {sections.open.length > 0 && (
         <Section title="할 일">
-          {sections.open.map((t) => (
-            <TaskItem
-              key={t.id}
-              task={t}
-              onToggle={onToggle}
-              onRename={onRename}
-              onDelete={onDelete}
-              {...extra}
-            />
-          ))}
+          <AnimatePresence initial={false}>
+            {sections.open.map((t) => (
+              <TaskItem
+                key={t.id}
+                task={t}
+                onToggle={onToggle}
+                onRename={onRename}
+                onDelete={onDelete}
+                {...extra}
+              />
+            ))}
+          </AnimatePresence>
         </Section>
       )}
       {/* 완료 섹션은 완료한 항목이 없어도 자리를 유지한다 (그날의 완료 영역이 늘 보이도록) */}
       <Section title="완료">
         {sections.completed.length > 0 ? (
-          sections.completed.map((t) => (
-            <TaskItem
-              key={t.id}
-              task={t}
-              onToggle={onToggle}
-              onRename={onRename}
-              onDelete={onDelete}
-              {...extra}
-            />
-          ))
+          <AnimatePresence initial={false}>
+            {sections.completed.map((t) => (
+              <TaskItem
+                key={t.id}
+                task={t}
+                onToggle={onToggle}
+                onRename={onRename}
+                onDelete={onDelete}
+                {...extra}
+              />
+            ))}
+          </AnimatePresence>
         ) : (
           <p className="px-3 py-2 text-xs text-muted">아직 없어요</p>
         )}
@@ -390,7 +447,7 @@ function Section({ title, children }: { title: string; children: ReactNode }) {
       <h2 className="px-3 pb-1 pt-2 text-xs font-medium uppercase tracking-wide text-muted">
         {title}
       </h2>
-      <div className="space-y-0.5">{children}</div>
+      <div className="flex flex-col gap-0.5">{children}</div>
     </section>
   );
 }

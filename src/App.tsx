@@ -1,4 +1,5 @@
 import { useEffect } from 'react';
+import { MotionConfig } from 'framer-motion';
 import { QueryProvider } from '@/providers/QueryProvider';
 import { AuthGate } from '@/features/auth/AuthGate';
 import { SpaceSidebar } from '@/features/spaces/SpaceSidebar';
@@ -28,6 +29,8 @@ export default function App() {
   return (
     <QueryProvider>
       <AuthGate>
+        {/* reducedMotion="user": OS의 '동작 줄이기' 설정을 켠 사용자에겐 애니메이션을 끈다 */}
+        <MotionConfig reducedMotion="user">
         <div className="flex h-full w-full">
           {/* 데스크톱: 좌측 공간 사이드바 */}
           <SpaceSidebar />
@@ -62,6 +65,7 @@ export default function App() {
           {/* 데스크톱·모바일 공용 모달 (사이드바/상단 탭에서 연다) */}
           <SpacesManagerModal />
         </div>
+        </MotionConfig>
       </AuthGate>
     </QueryProvider>
   );
