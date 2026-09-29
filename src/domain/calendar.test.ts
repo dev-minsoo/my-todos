@@ -17,6 +17,7 @@ function mkTask(p: Partial<Task>): Task {
     id: Math.random().toString(36).slice(2),
     userId: 'u',
     spaceId: 's',
+    groupId: null,
     title: 't',
     dueDate: '2026-09-10',
     completedAt: null,

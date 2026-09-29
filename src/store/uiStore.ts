@@ -16,6 +16,10 @@ type UiState = {
   viewedDate: string;
   /** 마지막으로 사용한 공간 id (추가 시 기본 공간) */
   lastSpaceId: string | null;
+  /** 공간별로 마지막에 쓴 대상 그룹 id (null = 그룹 없음) — 입력 기본값 */
+  lastGroupBySpace: Record<string, string | null>;
+  /** 접어 둔 그룹 id 목록 */
+  collapsedGroups: string[];
   /** 테마 선택 (기본: 시스템 따름) */
   theme: Theme;
   /** 데스크톱 사이드바 접힘 여부 (아이콘 레일) */
@@ -32,6 +36,8 @@ type UiState = {
   goToday: () => void;
   shiftDay: (delta: number) => void;
   setLastSpaceId: (id: string) => void;
+  setLastGroup: (spaceId: string, groupId: string | null) => void;
+  toggleGroupCollapsed: (groupId: string) => void;
   setTheme: (t: Theme) => void;
   toggleSidebar: () => void;
   setView: (v: AppView) => void;
@@ -45,6 +51,8 @@ export const useUiStore = create<UiState>()(
       currentTab: ALL_TAB,
       viewedDate: todayStr(),
       lastSpaceId: null,
+      lastGroupBySpace: {},
+      collapsedGroups: [],
       theme: 'system',
       sidebarCollapsed: false,
       activeView: 'day',
@@ -56,6 +64,14 @@ export const useUiStore = create<UiState>()(
       goToday: () => set({ viewedDate: todayStr() }),
       shiftDay: (delta) => set((s) => ({ viewedDate: addDaysStr(s.viewedDate, delta) })),
       setLastSpaceId: (id) => set({ lastSpaceId: id }),
+      setLastGroup: (spaceId, groupId) =>
+        set((s) => ({ lastGroupBySpace: { ...s.lastGroupBySpace, [spaceId]: groupId } })),
+      toggleGroupCollapsed: (groupId) =>
+        set((s) => ({
+          collapsedGroups: s.collapsedGroups.includes(groupId)
+            ? s.collapsedGroups.filter((id) => id !== groupId)
+            : [...s.collapsedGroups, groupId],
+        })),
       setTheme: (t) => set({ theme: t }),
       toggleSidebar: () => set((s) => ({ sidebarCollapsed: !s.sidebarCollapsed })),
       setView: (v) => set({ activeView: v }),
@@ -69,6 +85,8 @@ export const useUiStore = create<UiState>()(
       partialize: (s) => ({
         currentTab: s.currentTab,
         lastSpaceId: s.lastSpaceId,
+        lastGroupBySpace: s.lastGroupBySpace,
+        collapsedGroups: s.collapsedGroups,
         theme: s.theme,
         sidebarCollapsed: s.sidebarCollapsed,
       }),

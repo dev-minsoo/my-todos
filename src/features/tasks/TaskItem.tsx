@@ -1,8 +1,9 @@
 import { useState } from 'react';
 import { motion, useMotionValue, useTransform, type PanInfo } from 'framer-motion';
-import { CheckCircle2, Circle, Trash2, X } from 'lucide-react';
+import { CheckCircle2, Circle, FolderInput, Trash2, X } from 'lucide-react';
 import type { Task } from '@/db/types';
 import { cn } from '@/lib/utils';
+import { GroupMovePopover, type GroupOption } from './GroupMovePopover';
 
 type Props = {
   task: Task;
@@ -11,14 +12,28 @@ type Props = {
   onToggle?: (task: Task) => void;
   onRename?: (id: string, title: string) => void;
   onDelete?: (task: Task) => void;
+  /** 이동 대상이 될 그룹들 (넘기면 그룹 이동 버튼이 뜬다) */
+  groupOptions?: GroupOption[];
+  onMoveToGroup?: (taskId: string, groupId: string | null) => void;
+  onCreateGroupAndMove?: (taskId: string, name: string) => void;
 };
 
 // 스와이프 판정 임계: 이동 거리(px) 또는 튕기는 속도(px/s)
 const SWIPE_DISTANCE = 80;
 const SWIPE_VELOCITY = 600;
 
-export function TaskItem({ task, overdueDays, onToggle, onRename, onDelete }: Props) {
+export function TaskItem({
+  task,
+  overdueDays,
+  onToggle,
+  onRename,
+  onDelete,
+  groupOptions,
+  onMoveToGroup,
+  onCreateGroupAndMove,
+}: Props) {
   const done = task.completedAt != null;
+  const canMove = groupOptions != null && onMoveToGroup != null;
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(task.title);
 
@@ -118,6 +133,21 @@ export function TaskItem({ task, overdueDays, onToggle, onRename, onDelete }: Pr
           <span className="shrink-0 rounded-full bg-overdueBg px-2 py-0.5 text-[11px] font-medium text-overdueFg">
             {overdueDays}일 지남
           </span>
+        )}
+
+        {canMove && (
+          <GroupMovePopover
+            groups={groupOptions!}
+            currentGroupId={task.groupId}
+            onSelect={(groupId) => onMoveToGroup!(task.id, groupId)}
+            onCreate={
+              onCreateGroupAndMove ? (name) => onCreateGroupAndMove(task.id, name) : undefined
+            }
+            align="end"
+            triggerLabel="그룹 이동"
+            triggerClassName="shrink-0 rounded-md p-1 text-muted opacity-0 transition hover:text-accent focus-visible:opacity-100 group-hover:opacity-100 max-md:opacity-100"
+            trigger={<FolderInput className="size-4" />}
+          />
         )}
 
         <button

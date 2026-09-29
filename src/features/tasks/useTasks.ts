@@ -16,7 +16,12 @@ async function fetchTasks(): Promise<Task[]> {
   return ((data ?? []) as TaskRow[]).map(toTask);
 }
 
-export type AddTaskInput = { title: string; dueDate: string; spaceId: string };
+export type AddTaskInput = {
+  title: string;
+  dueDate: string;
+  spaceId: string;
+  groupId?: string | null;
+};
 
 type Ctx = { prev?: Task[] };
 
@@ -43,22 +48,30 @@ export function useTasks() {
   const invalidate = () => qc.invalidateQueries({ queryKey: key });
 
   const add = useMutation<Task, unknown, AddTaskInput, Ctx>({
-    mutationFn: async ({ title, dueDate, spaceId }) => {
+    mutationFn: async ({ title, dueDate, spaceId, groupId }) => {
       const { data, error } = await supabase
         .from('tasks')
-        .insert({ user_id: userId, space_id: spaceId, title, due_date: dueDate, position: String(Date.now()) })
+        .insert({
+          user_id: userId,
+          space_id: spaceId,
+          group_id: groupId ?? null,
+          title,
+          due_date: dueDate,
+          position: String(Date.now()),
+        })
         .select('*')
         .single();
       if (error) throw error;
       return toTask(data as TaskRow);
     },
-    onMutate: async ({ title, dueDate, spaceId }) => {
+    onMutate: async ({ title, dueDate, spaceId, groupId }) => {
       const ctx = await snapshot();
       const now = new Date().toISOString();
       const optimistic: Task = {
         id: `temp-${crypto.randomUUID()}`,
         userId,
         spaceId,
+        groupId: groupId ?? null,
         title,
         dueDate,
         completedAt: null,
@@ -71,6 +84,21 @@ export function useTasks() {
       return ctx;
     },
     onError: (e, _v, ctx) => rollback(e, ctx, '추가하지 못했습니다.'),
+    onSettled: invalidate,
+  });
+
+  // 항목을 다른 그룹으로 이동 (groupId === null → 그룹 없음). due_date는 건드리지 않는다.
+  const move = useMutation<void, unknown, { id: string; groupId: string | null }, Ctx>({
+    mutationFn: async ({ id, groupId }) => {
+      const { error } = await supabase.from('tasks').update({ group_id: groupId }).eq('id', id);
+      if (error) throw error;
+    },
+    onMutate: async ({ id, groupId }) => {
+      const ctx = await snapshot();
+      patch((p) => p.map((t) => (t.id === id ? { ...t, groupId } : t)));
+      return ctx;
+    },
+    onError: (e, _v, ctx) => rollback(e, ctx, '옮기지 못했습니다.'),
     onSettled: invalidate,
   });
 
@@ -142,5 +170,6 @@ export function useTasks() {
     toggleTask: (task: Task) => toggle.mutate(task),
     renameTask: (id: string, title: string) => rename.mutate({ id, title }),
     deleteTask: (task: Task) => remove.mutate(task),
+    moveTaskToGroup: (id: string, groupId: string | null) => move.mutate({ id, groupId }),
   };
 }

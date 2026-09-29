@@ -99,3 +99,60 @@ export function groupSectionsBySpace(
   }
   return groups;
 }
+
+/** 그룹에 속하지 않은 항목 버킷의 표시 이름 (컴포넌트·팝오버가 공유) */
+export const NO_GROUP_NAME = '미분류';
+
+/** 한 공간 안을 그룹별로 묶은 한 덩어리. groupId === null 은 "그룹 없음". */
+export type GroupBucket = {
+  groupId: string | null;
+  name: string;
+  sections: DaySections;
+  count: CompletionCount;
+};
+
+/** 그룹 계산에 필요한 메타(살아있는 그룹만, position 순으로 넘긴다) */
+type GroupMeta = { id: string; name: string };
+
+/**
+ * 특정 공간 화면: 그 공간의 tasks를 그룹별로 묶어 각각 섹션과 완료 카운트를 계산한다.
+ * groupSectionsBySpace와 대칭 구조.
+ * - 입력 `tasks`는 이미 한 공간으로 필터된 배열이어야 한다.
+ * - 그룹 순서는 넘겨받은 groups 순서를 따른다.
+ * - 마지막에 "그룹 없음" 버킷을 항상 덧붙인다: groupId가 없거나, 살아있지 않은(소프트 삭제된)
+ *   그룹을 가리키는 항목들.
+ * - 빈 그룹도 버킷을 반환한다(count.total === 0). 어떤 빈 버킷을 숨길지는 호출부가 정한다
+ *   (오늘=모든 그룹 노출, 지난 날=항목이 있는 그룹만).
+ */
+export function groupSectionsByGroup(
+  tasks: Task[],
+  groups: GroupMeta[],
+  viewedDate: string,
+  today: string
+): GroupBucket[] {
+  const liveIds = new Set(groups.map((g) => g.id));
+  const buckets: GroupBucket[] = [];
+
+  for (const g of groups) {
+    const sections = deriveSections(
+      tasks.filter((t) => t.groupId === g.id),
+      viewedDate,
+      today
+    );
+    buckets.push({ groupId: g.id, name: g.name, sections, count: completionCount(sections) });
+  }
+
+  const ungrouped = deriveSections(
+    tasks.filter((t) => t.groupId == null || !liveIds.has(t.groupId)),
+    viewedDate,
+    today
+  );
+  buckets.push({
+    groupId: null,
+    name: NO_GROUP_NAME,
+    sections: ungrouped,
+    count: completionCount(ungrouped),
+  });
+
+  return buckets;
+}

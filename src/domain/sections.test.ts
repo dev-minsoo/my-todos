@@ -1,6 +1,12 @@
 import { describe, it, expect } from 'vitest';
 import type { Task } from '@/db/types';
-import { deriveSections, completionCount, groupSectionsBySpace } from './sections';
+import {
+  deriveSections,
+  completionCount,
+  groupSectionsBySpace,
+  groupSectionsByGroup,
+  NO_GROUP_NAME,
+} from './sections';
 
 let seq = 0;
 function makeTask(partial: Partial<Task>): Task {
@@ -9,6 +15,7 @@ function makeTask(partial: Partial<Task>): Task {
     id: `t${seq}`,
     userId: 'u1',
     spaceId: 's1',
+    groupId: null,
     title: `task ${seq}`,
     dueDate: '2026-09-28',
     completedAt: null,
@@ -119,5 +126,61 @@ describe('groupSectionsBySpace (전체 탭)', () => {
     const work = groups.find((g) => g.spaceId === 's2')!;
     expect(personal.sections.carried).toHaveLength(0);
     expect(work.sections.carried).toHaveLength(1);
+  });
+});
+
+describe('groupSectionsByGroup (공간 안 그룹)', () => {
+  // position 순으로 넘긴다고 가정 (호출부 책임)
+  const GROUPS = [
+    { id: 'g1', name: '건강' },
+    { id: 'g2', name: '집안일' },
+  ];
+
+  it('그룹 순서대로 묶고, 맨 끝에 "그룹 없음" 버킷을 붙인다', () => {
+    const tasks = [
+      makeTask({ groupId: 'g1', dueDate: TODAY }),
+      makeTask({ groupId: 'g2', dueDate: TODAY }),
+      makeTask({ groupId: null, dueDate: TODAY }),
+    ];
+    const buckets = groupSectionsByGroup(tasks, GROUPS, TODAY, TODAY);
+    expect(buckets.map((b) => b.groupId)).toEqual(['g1', 'g2', null]);
+    expect(buckets[2].name).toBe(NO_GROUP_NAME);
+  });
+
+  it('빈 그룹도 버킷으로 반환한다(숨김은 호출부 몫)', () => {
+    const tasks = [makeTask({ groupId: 'g1', dueDate: TODAY })];
+    const buckets = groupSectionsByGroup(tasks, GROUPS, TODAY, TODAY);
+    expect(buckets.map((b) => b.groupId)).toEqual(['g1', 'g2', null]);
+    expect(buckets[1].count.total).toBe(0); // g2는 비어 있음
+  });
+
+  it('살아있는 그룹에 없는 group_id(소프트 삭제된 그룹)는 "그룹 없음"으로 떨어진다', () => {
+    const tasks = [
+      makeTask({ groupId: 'gone', dueDate: TODAY }), // GROUPS에 없는 id
+      makeTask({ groupId: 'g1', dueDate: TODAY }),
+    ];
+    const buckets = groupSectionsByGroup(tasks, GROUPS, TODAY, TODAY);
+    const none = buckets.find((b) => b.groupId === null)!;
+    expect(none.count.total).toBe(1);
+    expect(none.sections.open).toHaveLength(1);
+  });
+
+  it('그룹 카운트는 그룹마다 따로 계산된다(넘어옴 포함)', () => {
+    const tasks = [
+      makeTask({ groupId: 'g1', dueDate: '2026-09-26' }), // g1 carried
+      makeTask({ groupId: 'g1', dueDate: TODAY, completedAt: '2026-09-28T10:00:00' }), // g1 completed
+      makeTask({ groupId: 'g2', dueDate: TODAY }), // g2 open
+    ];
+    const buckets = groupSectionsByGroup(tasks, GROUPS, TODAY, TODAY);
+    expect(buckets[0].count).toEqual({ total: 2, done: 1 }); // g1
+    expect(buckets[1].count).toEqual({ total: 1, done: 0 }); // g2
+  });
+
+  it('그룹 안에서도 넘어옴은 오늘 화면에서만 잡힌다', () => {
+    const tasks = [makeTask({ groupId: 'g1', dueDate: '2026-09-26' })];
+    const onPast = groupSectionsByGroup(tasks, GROUPS, '2026-09-27', TODAY);
+    expect(onPast[0].sections.carried).toHaveLength(0);
+    const onToday = groupSectionsByGroup(tasks, GROUPS, TODAY, TODAY);
+    expect(onToday[0].sections.carried).toHaveLength(1);
   });
 });
