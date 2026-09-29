@@ -6,6 +6,7 @@ import {
   PanelLeftClose,
   PanelLeftOpen,
   Plus,
+  Search,
   Settings,
   Settings2,
   Trash2,
@@ -125,6 +126,9 @@ export function SpaceSidebar() {
       <div className={cn('border-t border-border py-3', collapsed ? 'flex flex-col items-center gap-1 px-2' : 'space-y-0.5 px-3')}>
         {collapsed ? (
           <>
+            <RailButton label="검색" active={activeView === 'search'} onClick={() => setView('search')}>
+              <Search className="size-4" />
+            </RailButton>
             <RailButton label="기록" active={activeView === 'calendar'} onClick={() => setView('calendar')}>
               <CalendarDays className="size-4" />
             </RailButton>
@@ -137,6 +141,10 @@ export function SpaceSidebar() {
           </>
         ) : (
           <>
+            <NavItem active={activeView === 'search'} onClick={() => setView('search')}>
+              <Search className="size-4 shrink-0 text-muted" />
+              <span>검색</span>
+            </NavItem>
             <NavItem active={activeView === 'calendar'} onClick={() => setView('calendar')}>
               <CalendarDays className="size-4 shrink-0 text-muted" />
               <span>기록</span>

@@ -8,6 +8,7 @@ import { SpacesManagerModal } from '@/features/spaces/SpacesManagerModal';
 import { SettingsPage } from '@/features/settings/SettingsPage';
 import { TrashPage } from '@/features/trash/TrashPage';
 import { CalendarPage } from '@/features/calendar/CalendarPage';
+import { SearchPage } from '@/features/search/SearchPage';
 import { DayHeader } from '@/features/day/DayHeader';
 import { TaskList } from '@/features/tasks/TaskList';
 import { TaskInput } from '@/features/tasks/TaskInput';
@@ -50,6 +51,8 @@ export default function App() {
                 <TrashPage />
               ) : activeView === 'calendar' ? (
                 <CalendarPage />
+              ) : activeView === 'search' ? (
+                <SearchPage />
               ) : (
                 <div className="flex h-full flex-col px-4 py-6 md:px-8 md:py-8">
                   <DayHeader />
