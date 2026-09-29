@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { createPortal } from 'react-dom';
 import { format, getDay, getMonth, isSameMonth, parseISO } from 'date-fns';
 import { ko } from 'date-fns/locale';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
@@ -362,6 +363,9 @@ function GrassGrid({
     return m !== prev ? format(parseISO(col[0]), 'M월', { locale: ko }) : '';
   });
 
+  // 호버(또는 포커스)한 칸 하나에 대해서만 커스텀 툴팁을 띄운다 (칸 위치는 rect로 잡아 포털로 렌더)
+  const [hover, setHover] = useState<{ date: string; rect: DOMRect } | null>(null);
+
   return (
     <div className="overflow-x-auto pb-1">
       <div className="inline-block">
@@ -391,11 +395,20 @@ function GrassGrid({
           {weeks.map((col, i) => (
             <div key={i} className="flex shrink-0 flex-col gap-1">
               {col.map((d) => (
-                <GrassCell key={d} date={d} stat={stat(d)} today={today} onOpen={onOpen} />
+                <GrassCell
+                  key={d}
+                  date={d}
+                  stat={stat(d)}
+                  today={today}
+                  onOpen={onOpen}
+                  onHover={setHover}
+                />
               ))}
             </div>
           ))}
         </div>
+
+        {hover && <GrassTooltip date={hover.date} stat={stat(hover.date)} rect={hover.rect} />}
 
         {/* 범례 */}
         <div className="mt-3 flex items-center gap-1.5 pl-7 text-[10px] text-muted">
@@ -423,22 +436,31 @@ function GrassCell({
   stat,
   today,
   onOpen,
+  onHover,
 }: {
   date: string;
   stat: DayStat;
   today: string;
   onOpen: (d: string) => void;
+  onHover: (h: { date: string; rect: DOMRect } | null) => void;
 }) {
   const future = date > today;
   const pct = heatPct(stat);
-  const title = `${format(parseISO(date), 'M월 d일', { locale: ko })} · ${stat.done}/${stat.total} 완료`;
+  const label = `${format(parseISO(date), 'M월 d일', { locale: ko })} · ${
+    stat.total > 0 ? `${stat.done}/${stat.total} 완료` : '할 일 없음'
+  }`;
+  const show = (e: { currentTarget: HTMLElement }) =>
+    onHover({ date, rect: e.currentTarget.getBoundingClientRect() });
   return (
     <button
       type="button"
       disabled={future}
       onClick={() => onOpen(date)}
-      title={title}
-      aria-label={title}
+      onMouseEnter={show}
+      onMouseLeave={() => onHover(null)}
+      onFocus={show}
+      onBlur={() => onHover(null)}
+      aria-label={label}
       className={cn(
         'size-3 rounded-[3px] bg-surface2 transition',
         future ? 'opacity-40' : 'hover:ring-1 hover:ring-accent',
@@ -450,6 +472,35 @@ function GrassCell({
           : undefined
       }
     />
+  );
+}
+
+/** 잔디 칸 위에 뜨는 커스텀 툴팁 (포털 — 가로 스크롤 컨테이너에 잘리지 않게). */
+function GrassTooltip({ date, stat, rect }: { date: string; stat: DayStat; rect: DOMRect }) {
+  const d = parseISO(date);
+  const dateLabel = format(d, 'M월 d일 (EEE)', { locale: ko });
+  const detail =
+    stat.total > 0 ? `${stat.done}/${stat.total} 완료 · ${Math.round(stat.rate * 100)}%` : '할 일 없음';
+
+  // 칸 위 중앙에 띄우되, 화면 위쪽이면 아래로 뒤집고 좌우로는 화면 안에 물린다.
+  const above = rect.top > 64;
+  const half = 92; // 대략적인 툴팁 반너비 (좌우 클램프용)
+  const left = Math.min(Math.max(rect.left + rect.width / 2, half + 4), window.innerWidth - half - 4);
+  const top = above ? rect.top - 8 : rect.bottom + 8;
+
+  return createPortal(
+    <div
+      role="tooltip"
+      className={cn(
+        'pointer-events-none fixed z-50 -translate-x-1/2 whitespace-nowrap rounded-lg border border-border bg-surface px-2.5 py-1.5 text-xs shadow-lg',
+        above && '-translate-y-full'
+      )}
+      style={{ left, top }}
+    >
+      <div className="font-medium text-text">{dateLabel}</div>
+      <div className="mt-0.5 text-muted">{detail}</div>
+    </div>,
+    document.body
   );
 }
 
