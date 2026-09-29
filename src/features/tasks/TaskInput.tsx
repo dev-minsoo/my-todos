@@ -1,13 +1,19 @@
 import { useRef, useState } from 'react';
-import { ArrowUp, ChevronDown, Folder, Plus } from 'lucide-react';
-import { ALL_TAB } from '@/db/types';
+import { getDay, parseISO } from 'date-fns';
+import { ArrowUp, ChevronDown, Folder, Plus, Repeat } from 'lucide-react';
+import { ALL_TAB, type RecurrenceRule } from '@/db/types';
 import { useUiStore } from '@/store/uiStore';
 import { NO_GROUP_NAME } from '@/domain/sections';
+import { ruleLabel } from '@/domain/recurrence';
 import { useActiveTab } from '@/features/spaces/useActiveTab';
 import { useGroups } from '@/features/spaces/useGroups';
+import { useRecurrences } from '@/features/spaces/useRecurrences';
 import { SpacePickerPopover } from '@/features/spaces/SpacePickerPopover';
 import { targetSpaceId } from '@/features/spaces/spaceSelection';
+import { PopoverMenu } from '@/components/PopoverMenu';
+import { cn } from '@/lib/utils';
 import { GroupMovePopover, type GroupOption } from './GroupMovePopover';
+import { RuleControls } from './RecurrencePopover';
 import { useTasks } from './useTasks';
 
 const CHIP_CLASS =
@@ -15,6 +21,8 @@ const CHIP_CLASS =
 
 export function TaskInput() {
   const [value, setValue] = useState('');
+  // 이번에 등록할 반복 규칙(null = 반복 없음, 일반 할 일). 등록 후 null로 리셋한다.
+  const [rule, setRule] = useState<RecurrenceRule | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const viewedDate = useUiStore((s) => s.viewedDate);
   const lastSpaceId = useUiStore((s) => s.lastSpaceId);
@@ -25,6 +33,7 @@ export function TaskInput() {
   const { activeTab, spaces } = useActiveTab();
   const { groups, createGroup } = useGroups();
   const { addTask } = useTasks();
+  const { addRecurrence } = useRecurrences();
 
   // 새 할 일이 들어갈 대상 공간: 특정 공간 탭이면 그 공간, [전체]면 마지막에 쓴 공간(칩으로 변경).
   const spaceId = targetSpaceId(activeTab, spaces, lastSpaceId);
@@ -55,10 +64,17 @@ export function TaskInput() {
   function submit() {
     const title = value.trim();
     if (!title || !spaceId) return;
-    // 지금 보는 날짜·대상 공간·대상 그룹에 들어간다. (v0.2) "내일/금" 파싱은 이후 dueDate 보정으로.
-    addTask({ title, dueDate: viewedDate, spaceId, groupId: targetGroupId });
+    if (rule) {
+      // 반복 규칙으로 등록 — 발생분은 저장하지 않고 보는 날짜부터 규칙에 맞게 뜬다.
+      addRecurrence({ title, rule, spaceId, groupId: targetGroupId, startDate: viewedDate });
+    } else {
+      // 지금 보는 날짜·대상 공간·대상 그룹에 들어간다. (v0.2) "내일/금" 파싱은 이후 dueDate 보정으로.
+      addTask({ title, dueDate: viewedDate, spaceId, groupId: targetGroupId });
+    }
     setLastSpaceId(spaceId);
     setValue('');
+    // 다음 항목이 실수로 전부 반복되지 않게 규칙은 매번 리셋.
+    setRule(null);
     // 연속 추가: 버튼 탭으로 등록해도 입력칸에 포커스를 되돌려 바로 다음 항목을 적게 한다.
     inputRef.current?.focus();
   }
@@ -112,6 +128,44 @@ export function TaskInput() {
               }
             />
           )}
+          <PopoverMenu
+            align="start"
+            width={240}
+            triggerLabel="반복 설정"
+            triggerClassName={cn(CHIP_CLASS, rule && 'bg-accentSoft text-accent hover:bg-accentSoft')}
+            trigger={
+              <>
+                <Repeat className={cn('size-3.5', rule ? 'text-accent' : 'text-muted')} />
+                <span className="max-w-[8rem] truncate">{rule ? ruleLabel(rule) : '반복 없음'}</span>
+                <ChevronDown className="size-3 text-muted" />
+              </>
+            }
+          >
+            {(close) => (
+              <>
+                <button
+                  role="menuitem"
+                  onClick={() => {
+                    setRule(null);
+                    close();
+                  }}
+                  className={cn(
+                    'flex w-full items-center px-3 py-2 text-left text-sm transition hover:bg-surface2',
+                    rule === null && 'font-medium text-accent'
+                  )}
+                >
+                  반복 없음
+                </button>
+                <div className="border-t border-border pt-0.5">
+                  <RuleControls
+                    rule={rule}
+                    onChange={setRule}
+                    defaultWeekday={getDay(parseISO(viewedDate))}
+                  />
+                </div>
+              </>
+            )}
+          </PopoverMenu>
         </div>
       )}
       <div className="flex items-center gap-2 rounded-xl bg-bg px-3 py-2.5 ring-1 ring-transparent transition focus-within:ring-accent">

@@ -1,5 +1,6 @@
 import {
   useEffect,
+  useMemo,
   useRef,
   useState,
   type PointerEvent as ReactPointerEvent,
@@ -27,13 +28,16 @@ import {
   groupSectionsByGroup,
 } from '@/domain/sections';
 import type { DaySections, GroupBucket } from '@/domain/sections';
+import { isVirtualOccurrence, virtualOccurrences } from '@/domain/recurrence';
 import type { Task } from '@/db/types';
 import { useActiveTab } from '@/features/spaces/useActiveTab';
 import { useGroups } from '@/features/spaces/useGroups';
+import { useRecurrences } from '@/features/spaces/useRecurrences';
+import { useUserId } from '@/features/auth/authContext';
 import { moveItem } from '@/features/spaces/spaceSelection';
 import { cn } from '@/lib/utils';
 import type { GroupOption } from './GroupMovePopover';
-import { TaskItem } from './TaskItem';
+import { TaskItem, type RecurrenceProps } from './TaskItem';
 import { useTasks } from './useTasks';
 
 const byPosition = (a: Group, b: Group) =>
@@ -42,20 +46,60 @@ const byPosition = (a: Group, b: Group) =>
 export function TaskList() {
   const viewedDate = useUiStore((s) => s.viewedDate);
 
+  const userId = useUserId();
   const { activeTab, spaces } = useActiveTab();
-  const { tasks, isLoading, toggleTask, renameTask, deleteTask, moveTaskToGroup, reorderTask } =
-    useTasks();
+  const {
+    tasks,
+    recurrenceSkips,
+    isLoading,
+    toggleTask,
+    renameTask,
+    deleteTask,
+    moveTaskToGroup,
+    reorderTask,
+  } = useTasks();
   const { groups, renameGroup, deleteGroup, reorderGroups } = useGroups();
+  const { recurrences, updateRecurrence, removeRecurrence } = useRecurrences();
 
   const today = todayStr();
   const isAll = activeTab === ALL_TAB;
   const isToday = viewedDate === today;
 
+  // 보는 날짜의 가상 발생분을 계산해 실제 목록에 섞는다(compute-on-view).
+  // 감지엔 살아있는 tasks + 그날 "건너뜀" 표식을 함께 넘겨, 이미 처리한 반복은 다시 뜨지 않게 한다.
+  const dayTasks = useMemo(() => {
+    const virtuals = virtualOccurrences(
+      recurrences,
+      [...tasks, ...recurrenceSkips],
+      viewedDate,
+      { userId }
+    );
+    return [...tasks, ...virtuals];
+  }, [recurrences, tasks, recurrenceSkips, viewedDate, userId]);
+
+  // 반복 관리 값 묶음 — 항목까지 흘려보낸다(반복 아이콘·규칙 편집·중단).
+  const recurrenceProps: RecurrenceProps = {
+    recurrences,
+    onUpdate: updateRecurrence,
+    onStop: removeRecurrence,
+  };
+
+  // 이름 수정 라우팅: 반복 출신이면 시리즈 제목을 고치고(습관은 "매일 같은 것"),
+  // 이미 실체화된 실제 행이면 그 행 제목도 함께 바꾼다. 일반 항목은 그대로.
+  const handleRename = (task: Task, title: string) => {
+    if (task.recurrenceId != null) {
+      updateRecurrence({ id: task.recurrenceId, title });
+      if (!isVirtualOccurrence(task)) renameTask(task.id, title);
+    } else {
+      renameTask(task.id, title);
+    }
+  };
+
   // 전체 탭 상단 카운트는 현존 공간의 할 일만 센다 (삭제된 공간의 고아 태스크 제외 → 공간별 묶음과 합계 일치)
   const spaceIds = new Set(spaces.map((s) => s.id));
   const scoped = isAll
-    ? tasks.filter((t) => spaceIds.has(t.spaceId))
-    : tasks.filter((t) => t.spaceId === activeTab);
+    ? dayTasks.filter((t) => spaceIds.has(t.spaceId))
+    : dayTasks.filter((t) => t.spaceId === activeTab);
   const sections = deriveSections(scoped, viewedDate, today);
   const count = completionCount(sections); // 상단 진행률: 전체 합산(또는 단일 공간)
   const isEmpty = count.total === 0;
@@ -63,7 +107,7 @@ export function TaskList() {
   const allDone = !isEmpty && count.done === count.total; // 오늘 다 끝냈을 때 축하 배너 조건
 
   // 전체 탭에서는 공간별로 묶는다 (SPEC §82)
-  const spaceGroupsView = isAll ? groupSectionsBySpace(tasks, spaces, viewedDate, today) : [];
+  const spaceGroupsView = isAll ? groupSectionsBySpace(dayTasks, spaces, viewedDate, today) : [];
 
   // 특정 공간: 그 공간의 살아있는 그룹(position 순). 하나라도 있으면 그룹별로 나눠 보여준다.
   const spaceGroups = isAll
@@ -75,7 +119,7 @@ export function TaskList() {
     ? groupSectionsByGroup(scoped, groupOptions, viewedDate, today)
     : [];
 
-  const handlers = { onToggle: toggleTask, onRename: renameTask, onDelete: deleteTask };
+  const handlers = { onToggle: toggleTask, onRename: handleRename, onDelete: deleteTask };
 
   // 세로 리오더 커밋: 드롭 위치의 두 이웃 position 사이 키를 계산해 저장한다(due_date 불변).
   // 단일 공간 뷰(그리고 각 그룹 버킷)의 "할 일"에서만 쓴다. [전체] 탭·완료/넘어옴은 제외.
@@ -135,7 +179,7 @@ export function TaskList() {
                     {g.count.done}/{g.count.total}
                   </span>
                 </div>
-                <SectionsView sections={g.sections} {...handlers} />
+                <SectionsView sections={g.sections} recurrenceProps={recurrenceProps} {...handlers} />
               </section>
             ))
           )
@@ -161,6 +205,7 @@ export function TaskList() {
                   bucket={bucket}
                   group={group ?? null}
                   moveProps={moveProps}
+                  recurrenceProps={recurrenceProps}
                   onRenameGroup={renameGroup}
                   onDeleteGroup={group ? () => deleteGroup(group) : undefined}
                   onMoveUp={group && idx > 0 ? () => reorderAt(idx, idx - 1) : undefined}
@@ -179,7 +224,12 @@ export function TaskList() {
         ) : (
           // 특정 공간 + 그룹 없음 + 항목 있음: 평면 렌더(기존)
           <div className="pb-2">
-            <SectionsView sections={sections} reorder={reorderCtl} {...handlers} />
+            <SectionsView
+              sections={sections}
+              reorder={reorderCtl}
+              recurrenceProps={recurrenceProps}
+              {...handlers}
+            />
           </div>
         )}
       </div>
@@ -237,7 +287,7 @@ type MoveProps = {
 
 type SectionHandlers = {
   onToggle: (task: Task) => void;
-  onRename: (id: string, title: string) => void;
+  onRename: (task: Task, title: string) => void;
   onDelete: (task: Task) => void;
 };
 
@@ -246,6 +296,7 @@ function GroupSection({
   bucket,
   group,
   moveProps,
+  recurrenceProps,
   reorder,
   onToggle,
   onRename,
@@ -258,6 +309,7 @@ function GroupSection({
   bucket: GroupBucket;
   group: Group | null;
   moveProps: MoveProps;
+  recurrenceProps?: RecurrenceProps;
   reorder?: ReorderCommit;
   onRenameGroup: (id: string, name: string) => void;
   onDeleteGroup?: () => void;
@@ -351,6 +403,7 @@ function GroupSection({
             onRename={onRename}
             onDelete={onDelete}
             moveProps={moveProps}
+            recurrenceProps={recurrenceProps}
             reorder={reorder}
           />
         ))}
@@ -397,19 +450,21 @@ function SectionsView({
   onRename,
   onDelete,
   moveProps,
+  recurrenceProps,
   reorder,
 }: {
   sections: DaySections;
   moveProps?: MoveProps;
+  recurrenceProps?: RecurrenceProps;
   /** 넘기면 "할 일" 목록을 세로 드래그로 리오더할 수 있다 */
   reorder?: ReorderCommit;
 } & SectionHandlers) {
-  const extra = moveProps
-    ? {
-        groupOptions: moveProps.groupOptions,
-        onMoveToGroup: moveProps.onMoveToGroup,
-      }
-    : {};
+  const extra = {
+    ...(moveProps
+      ? { groupOptions: moveProps.groupOptions, onMoveToGroup: moveProps.onMoveToGroup }
+      : {}),
+    recurrenceProps,
+  };
   return (
     <>
       {sections.carried.length > 0 && (
@@ -436,6 +491,7 @@ function SectionsView({
               items={sections.open}
               onCommit={reorder}
               moveProps={moveProps}
+              recurrenceProps={recurrenceProps}
               onToggle={onToggle}
               onRename={onRename}
               onDelete={onDelete}
@@ -490,6 +546,7 @@ function ReorderList({
   items,
   onCommit,
   moveProps,
+  recurrenceProps,
   onToggle,
   onRename,
   onDelete,
@@ -497,6 +554,7 @@ function ReorderList({
   items: Task[];
   onCommit: ReorderCommit;
   moveProps?: MoveProps;
+  recurrenceProps?: RecurrenceProps;
 } & SectionHandlers) {
   const [order, setOrder] = useState<Task[]>(items);
   const orderRef = useRef(order);
@@ -535,6 +593,7 @@ function ReorderList({
           task={task}
           onCommit={() => commit(task.id)}
           moveProps={moveProps}
+          recurrenceProps={recurrenceProps}
           onToggle={onToggle}
           onRename={onRename}
           onDelete={onDelete}
@@ -549,6 +608,7 @@ function ReorderRow({
   task,
   onCommit,
   moveProps,
+  recurrenceProps,
   onToggle,
   onRename,
   onDelete,
@@ -556,6 +616,7 @@ function ReorderRow({
   task: Task;
   onCommit: () => void;
   moveProps?: MoveProps;
+  recurrenceProps?: RecurrenceProps;
 } & SectionHandlers) {
   const controls = useDragControls();
   return (
@@ -567,6 +628,7 @@ function ReorderRow({
         onDelete={onDelete}
         groupOptions={moveProps?.groupOptions}
         onMoveToGroup={moveProps?.onMoveToGroup}
+        recurrenceProps={recurrenceProps}
         dragHandle
         onDragHandlePointerDown={(e: ReactPointerEvent) => controls.start(e)}
       />

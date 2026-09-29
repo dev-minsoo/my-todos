@@ -17,8 +17,11 @@ import {
   type DayStat,
 } from '@/domain/calendar';
 import { PageHeader } from '@/components/PageHeader';
+import { virtualOccurrences } from '@/domain/recurrence';
 import { useTasks } from '@/features/tasks/useTasks';
 import { useActiveTab } from '@/features/spaces/useActiveTab';
+import { useRecurrences } from '@/features/spaces/useRecurrences';
+import { useUserId } from '@/features/auth/authContext';
 
 const WEEKDAYS = ['일', '월', '화', '수', '목', '금', '토'];
 const GRASS_WEEKS = 26; // 약 6개월
@@ -30,8 +33,10 @@ export function CalendarPage() {
   const setViewedDate = useUiStore((s) => s.setViewedDate);
   const setView = useUiStore((s) => s.setView);
 
-  const { tasks } = useTasks();
+  const userId = useUserId();
+  const { tasks, recurrenceSkips } = useTasks();
   const { spaces } = useActiveTab();
+  const { recurrences } = useRecurrences();
 
   const today = todayStr();
   const [mode, setMode] = useState<Mode>('month');
@@ -42,11 +47,17 @@ export function CalendarPage() {
   const spaceIds = new Set(spaces.map((s) => s.id));
   const scoped = tasks.filter((t) => spaceIds.has(t.spaceId));
 
-  const stat = (d: string) => dayStat(scoped, d, today);
+  // 날짜별 가상 발생분 주입 — 반복이 그날 open/완료로 자연 집계된다(시작일 이전엔 안 뜸).
+  // 규칙은 현존 공간 것만, 실체화 감지엔 tasks + "건너뜀" 표식을 함께 본다.
+  const recs = recurrences.filter((r) => spaceIds.has(r.spaceId));
+  const detect = [...tasks, ...recurrenceSkips];
+  const withVirtual = (d: string) => [...scoped, ...virtualOccurrences(recs, detect, d, { userId })];
+
+  const stat = (d: string) => dayStat(withVirtual(d), d, today);
 
   // 그날 공간별 상태를 색 점으로 (공간 정렬 순서 유지) — 완료=꽉 찬 점, 할일만=빈 점
   const dotsOf = (d: string): SpaceDot[] => {
-    const byId = new Map(daySpaceStates(scoped, d, today).map((st) => [st.spaceId, st]));
+    const byId = new Map(daySpaceStates(withVirtual(d), d, today).map((st) => [st.spaceId, st]));
     return spaces
       .filter((s) => byId.has(s.id))
       .map((s) => ({ id: s.id, color: s.color, done: byId.get(s.id)!.done }));

@@ -1,21 +1,33 @@
 import { useState, type PointerEvent as ReactPointerEvent } from 'react';
 import { motion, useMotionValue, useTransform, type PanInfo } from 'framer-motion';
-import { CheckCircle2, Circle, FolderInput, GripVertical, Trash2, X } from 'lucide-react';
-import type { Task } from '@/db/types';
+import { CheckCircle2, Circle, FolderInput, GripVertical, Repeat, Trash2, X } from 'lucide-react';
+import type { Recurrence, RecurrenceRule, Task } from '@/db/types';
+import { isVirtualOccurrence } from '@/domain/recurrence';
 import { cn } from '@/lib/utils';
 import { GroupMovePopover, type GroupOption } from './GroupMovePopover';
+import { RecurrencePopover } from './RecurrencePopover';
+
+/** 반복 관리에 필요한 값 묶음(TaskList에서 아래로 흘려보낸다). */
+export type RecurrenceProps = {
+  /** 살아있는 반복 규칙들 (task.recurrenceId로 매칭) */
+  recurrences: Recurrence[];
+  onUpdate: (input: { id: string; title?: string; rule?: RecurrenceRule }) => void;
+  onStop: (rec: Recurrence) => void;
+};
 
 type Props = {
   task: Task;
   /** 넘어옴 항목이면 밀린 일수 */
   overdueDays?: number;
   onToggle?: (task: Task) => void;
-  onRename?: (id: string, title: string) => void;
+  onRename?: (task: Task, title: string) => void;
   onDelete?: (task: Task) => void;
   /** 이동 대상이 될 그룹들 (넘기면 그룹 이동 버튼이 뜬다) */
   groupOptions?: GroupOption[];
   onMoveToGroup?: (taskId: string, groupId: string | null) => void;
   onCreateGroupAndMove?: (taskId: string, name: string) => void;
+  /** 반복 출신 항목의 규칙 아이콘·관리 팝오버용 */
+  recurrenceProps?: RecurrenceProps;
   /** 세로 리오더용 좌측 핸들을 노출한다 (open 목록에서만) */
   dragHandle?: boolean;
   /** 핸들에서 포인터를 누르면 세로 리오더 드래그를 시작한다 (Reorder.Item의 dragControls.start) */
@@ -35,11 +47,18 @@ export function TaskItem({
   groupOptions,
   onMoveToGroup,
   onCreateGroupAndMove,
+  recurrenceProps,
   dragHandle,
   onDragHandlePointerDown,
 }: Props) {
   const done = task.completedAt != null;
-  const canMove = groupOptions != null && onMoveToGroup != null;
+  // 가상 발생분은 아직 실체화 전이라 순서변경·그룹이동을 걸지 않는다(체크/삭제로 실체화된 뒤 가능).
+  const isVirtual = isVirtualOccurrence(task);
+  const canMove = !isVirtual && groupOptions != null && onMoveToGroup != null;
+  const recurrence =
+    task.recurrenceId != null && recurrenceProps
+      ? recurrenceProps.recurrences.find((r) => r.id === task.recurrenceId) ?? null
+      : null;
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(task.title);
 
@@ -56,7 +75,7 @@ export function TaskItem({
   function commit() {
     setEditing(false);
     const next = draft.trim();
-    if (next && next !== task.title) onRename?.(task.id, next);
+    if (next && next !== task.title) onRename?.(task, next);
     else setDraft(task.title);
   }
 
@@ -103,7 +122,7 @@ export function TaskItem({
         onDragEnd={handleDragEnd}
         className="group relative flex items-center gap-3 rounded-xl bg-surface px-3 py-2 transition hover:bg-surface2"
       >
-        {dragHandle && (
+        {dragHandle && !isVirtual && (
           <button
             type="button"
             aria-label="순서 변경"
@@ -160,6 +179,20 @@ export function TaskItem({
             {task.title}
           </button>
         )}
+
+        {task.recurrenceId != null &&
+          (recurrence ? (
+            <RecurrencePopover
+              recurrence={recurrence}
+              onUpdate={recurrenceProps!.onUpdate}
+              onStop={recurrenceProps!.onStop}
+            />
+          ) : (
+            // 규칙 객체를 못 찾으면(중단됐거나 관리 컨텍스트 밖) 정적 아이콘만.
+            <span className="shrink-0 p-1 text-muted" title="반복에서 나온 할 일" aria-hidden>
+              <Repeat className="size-3.5" />
+            </span>
+          ))}
 
         {overdueDays != null && overdueDays > 0 && (
           <span className="shrink-0 rounded-full bg-overdueBg px-2 py-0.5 text-[11px] font-medium text-overdueFg">

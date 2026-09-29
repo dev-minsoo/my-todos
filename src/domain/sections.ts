@@ -42,6 +42,10 @@ const byCompletedDesc = (a: Task, b: Task) => {
  * - completed: 완료 시각의 날짜 === viewedDate
  *
  * 규칙상 세 섹션은 서로 겹치지 않는다.
+ *
+ * 반복(습관형): recurrenceId가 있는 항목은 carried에서 제외한다. 실체화 후 다시 체크
+ * 해제해도 과거 미완료 행이 오늘로 넘어오지 않게 하는 가드 — "월요일 안 한 운동은
+ * 월요일로 끝나고 화요일엔 새 운동만 뜬다"는 습관형 규칙을 여기서 명시적으로 고정한다.
  */
 export function deriveSections(tasks: Task[], viewedDate: string, today: string): DaySections {
   const items = tasks.filter(alive);
@@ -53,7 +57,7 @@ export function deriveSections(tasks: Task[], viewedDate: string, today: string)
 
   const carried: CarriedTask[] = isToday
     ? items
-        .filter((t) => t.completedAt == null && t.dueDate < today)
+        .filter((t) => t.completedAt == null && t.dueDate < today && t.recurrenceId == null)
         .map((t) => ({ ...t, overdueDays: daysBetween(t.dueDate, today) }))
         .sort(byPosition)
     : [];

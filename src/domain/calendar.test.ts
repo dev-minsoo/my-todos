@@ -22,6 +22,7 @@ function mkTask(p: Partial<Task>): Task {
     dueDate: '2026-09-10',
     completedAt: null,
     position: '1',
+    recurrenceId: null,
     createdAt: '2026-09-10T00:00:00',
     updatedAt: '2026-09-10T00:00:00',
     deletedAt: null,

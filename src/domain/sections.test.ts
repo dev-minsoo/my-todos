@@ -20,6 +20,7 @@ function makeTask(partial: Partial<Task>): Task {
     dueDate: '2026-09-28',
     completedAt: null,
     position: 'a0',
+    recurrenceId: null,
     createdAt: `2026-09-28T00:00:0${seq % 10}`,
     updatedAt: '2026-09-28T00:00:00',
     deletedAt: null,
@@ -64,6 +65,28 @@ describe('deriveSections (오늘 화면)', () => {
     const tasks = [makeTask({ dueDate: TODAY, deletedAt: '2026-09-28T00:00:00' })];
     const s = deriveSections(tasks, TODAY, TODAY);
     expect(s.open).toHaveLength(0);
+  });
+});
+
+describe('deriveSections 반복 가드 (습관형: 안 넘어옴)', () => {
+  it('반복 출신(recurrenceId 있음)의 과거 미완료 행은 carried에 안 잡힌다', () => {
+    const tasks = [
+      makeTask({ dueDate: '2026-09-26', recurrenceId: 'r1' }), // 실체화됐다 체크 해제된 과거 반복 행
+      makeTask({ dueDate: '2026-09-26' }), // 일반 과거 미완료 (넘어옴)
+    ];
+    const s = deriveSections(tasks, TODAY, TODAY);
+    expect(s.carried).toHaveLength(1); // 일반 항목만 넘어온다
+    expect(s.carried[0].recurrenceId).toBeNull();
+  });
+
+  it('반복 출신도 open/completed에는 정상 포함된다', () => {
+    const tasks = [
+      makeTask({ dueDate: TODAY, recurrenceId: 'r1' }), // 오늘 발생분(실체화)
+      makeTask({ dueDate: TODAY, recurrenceId: 'r2', completedAt: '2026-09-28T09:00:00' }), // 오늘 완료
+    ];
+    const s = deriveSections(tasks, TODAY, TODAY);
+    expect(s.open).toHaveLength(1);
+    expect(s.completed).toHaveLength(1);
   });
 });
 
