@@ -37,6 +37,7 @@ import { useUserId } from '@/features/auth/authContext';
 import { moveItem } from '@/features/spaces/spaceSelection';
 import { cn } from '@/lib/utils';
 import type { GroupOption } from './GroupMovePopover';
+import type { TaskMoveProps } from './MoveTaskPopover';
 import { TaskItem, type RecurrenceProps } from './TaskItem';
 import { useTasks } from './useTasks';
 
@@ -56,6 +57,8 @@ export function TaskList() {
     renameTask,
     deleteTask,
     moveTaskToGroup,
+    moveTaskToDate,
+    moveTaskToSpace,
     reorderTask,
   } = useTasks();
   const { groups, renameGroup, deleteGroup, reorderGroups } = useGroups();
@@ -127,10 +130,14 @@ export function TaskList() {
     reorderTask(movedId, positionBetween(before, after));
   const reorderCtl = isAll ? undefined : commitReorder;
 
-  // 그룹 이동 핸들러 (그룹이 있는 특정 공간에서만 항목에 붙는다).
-  // 새 그룹 생성은 목록이 아니라 입력칸 위 대상 그룹 셀렉트에서만 한다 → 여기선 이동만.
+  // 통합 이동(날짜·공간·그룹) 값 묶음 — 모든 뷰의 항목에 붙는다.
+  // 그룹 목록은 전 공간을 넘기고, 팝오버가 각 항목의 spaceId로 걸러 쓴다([전체] 탭 대응).
   const moveProps: MoveProps = {
-    groupOptions,
+    spaces: spaces.map((s) => ({ id: s.id, name: s.name, color: s.color })),
+    groups,
+    today,
+    onMoveToDate: moveTaskToDate,
+    onMoveToSpace: moveTaskToSpace,
     onMoveToGroup: moveTaskToGroup,
   };
 
@@ -179,7 +186,12 @@ export function TaskList() {
                     {g.count.done}/{g.count.total}
                   </span>
                 </div>
-                <SectionsView sections={g.sections} recurrenceProps={recurrenceProps} {...handlers} />
+                <SectionsView
+                  sections={g.sections}
+                  moveProps={moveProps}
+                  recurrenceProps={recurrenceProps}
+                  {...handlers}
+                />
               </section>
             ))
           )
@@ -227,6 +239,7 @@ export function TaskList() {
             <SectionsView
               sections={sections}
               reorder={reorderCtl}
+              moveProps={moveProps}
               recurrenceProps={recurrenceProps}
               {...handlers}
             />
@@ -280,10 +293,7 @@ function AllDoneBanner({ total }: { total: number }) {
   );
 }
 
-type MoveProps = {
-  groupOptions: GroupOption[];
-  onMoveToGroup: (taskId: string, groupId: string | null) => void;
-};
+type MoveProps = TaskMoveProps;
 
 type SectionHandlers = {
   onToggle: (task: Task) => void;
@@ -459,12 +469,7 @@ function SectionsView({
   /** 넘기면 "할 일" 목록을 세로 드래그로 리오더할 수 있다 */
   reorder?: ReorderCommit;
 } & SectionHandlers) {
-  const extra = {
-    ...(moveProps
-      ? { groupOptions: moveProps.groupOptions, onMoveToGroup: moveProps.onMoveToGroup }
-      : {}),
-    recurrenceProps,
-  };
+  const extra = { moveProps, recurrenceProps };
   return (
     <>
       {sections.carried.length > 0 && (
@@ -626,8 +631,7 @@ function ReorderRow({
         onToggle={onToggle}
         onRename={onRename}
         onDelete={onDelete}
-        groupOptions={moveProps?.groupOptions}
-        onMoveToGroup={moveProps?.onMoveToGroup}
+        moveProps={moveProps}
         recurrenceProps={recurrenceProps}
         dragHandle
         onDragHandlePointerDown={(e: ReactPointerEvent) => controls.start(e)}

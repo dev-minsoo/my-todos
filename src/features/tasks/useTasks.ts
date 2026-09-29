@@ -1,9 +1,12 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { format, parseISO } from 'date-fns';
+import { ko } from 'date-fns/locale';
 import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase';
 import type { Task } from '@/db/types';
 import { toTask, type TaskRow } from '@/db/mappers';
 import { useUserId } from '@/features/auth/authContext';
+import { addDaysStr, todayStr } from '@/domain/dayBoundary';
 import { maxValidPosition, positionAfter } from '@/domain/order';
 import { isVirtualOccurrence } from '@/domain/recurrence';
 
@@ -12,6 +15,15 @@ const tasksKey = (userId: string) => ['tasks', userId] as const;
 const taskSkipsKey = (userId: string) => ['taskSkips', userId] as const;
 
 const msg = (e: unknown, fallback: string) => (e instanceof Error ? e.message : fallback);
+
+/** 이동 토스트용 날짜 라벨. 오늘/내일/어제는 상대어로, 그 밖은 'M월 d일'. */
+function moveDateLabel(dateStr: string): string {
+  const today = todayStr();
+  if (dateStr === today) return '오늘';
+  if (dateStr === addDaysStr(today, 1)) return '내일';
+  if (dateStr === addDaysStr(today, -1)) return '어제';
+  return format(parseISO(dateStr), 'M월 d일', { locale: ko });
+}
 
 async function fetchTasks(): Promise<Task[]> {
   // RLS가 본인 행만 반환한다. 살아있는 것만.
@@ -151,6 +163,88 @@ export function useTasks() {
       return ctx;
     },
     onError: (e, _v, ctx) => rollback(e, ctx, '옮기지 못했습니다.'),
+    onSettled: invalidate,
+  });
+
+  // 다른 날로 이동 — 사용자가 직접 옮기는 명시적 이동이므로 due_date를 실제로 바꾼다.
+  // (자동 넘어옴은 계산이라 저장하지 않지만, 이건 사용자가 고른 이동이다.)
+  // showUndo=true인 정방향 이동만 되돌리기 토스트를 띄우고, 되돌리기(역방향)는 조용히 실행한다.
+  const moveDate = useMutation<
+    void,
+    unknown,
+    { id: string; dueDate: string; prevDate: string; showUndo: boolean },
+    Ctx
+  >({
+    mutationFn: async ({ id, dueDate }) => {
+      const { error } = await supabase.from('tasks').update({ due_date: dueDate }).eq('id', id);
+      if (error) throw error;
+    },
+    onMutate: async ({ id, dueDate }) => {
+      const ctx = await snapshot();
+      patch((p) => p.map((t) => (t.id === id ? { ...t, dueDate } : t)));
+      return ctx;
+    },
+    onError: (e, _v, ctx) => rollback(e, ctx, '옮기지 못했습니다.'),
+    onSuccess: (_d, { id, dueDate, prevDate, showUndo }) => {
+      if (!showUndo) return;
+      toast(`${moveDateLabel(dueDate)}로 옮김`, {
+        action: {
+          label: '실행 취소',
+          onClick: () =>
+            moveDate.mutate({ id, dueDate: prevDate, prevDate: dueDate, showUndo: false }),
+        },
+      });
+    },
+    onSettled: invalidate,
+  });
+
+  // 다른 공간으로 이동 — space_id를 바꾸고 group_id는 초기화한다(옛 그룹은 옛 공간 소속이라 무의미).
+  const moveSpace = useMutation<
+    void,
+    unknown,
+    {
+      id: string;
+      spaceId: string;
+      groupId: string | null;
+      prevSpaceId: string;
+      prevGroupId: string | null;
+      spaceName: string;
+      showUndo: boolean;
+    },
+    Ctx
+  >({
+    mutationFn: async ({ id, spaceId, groupId }) => {
+      const { error } = await supabase
+        .from('tasks')
+        .update({ space_id: spaceId, group_id: groupId })
+        .eq('id', id);
+      if (error) throw error;
+    },
+    onMutate: async ({ id, spaceId, groupId }) => {
+      const ctx = await snapshot();
+      patch((p) => p.map((t) => (t.id === id ? { ...t, spaceId, groupId } : t)));
+      return ctx;
+    },
+    onError: (e, _v, ctx) => rollback(e, ctx, '옮기지 못했습니다.'),
+    onSuccess: (_d, { id, spaceId, groupId, prevSpaceId, prevGroupId, spaceName, showUndo }) => {
+      if (!showUndo) return;
+      toast(`${spaceName} 공간으로 옮김`, {
+        action: {
+          label: '실행 취소',
+          onClick: () =>
+            // 되돌리기: 이전 공간·그룹을 그대로 복원(조용히).
+            moveSpace.mutate({
+              id,
+              spaceId: prevSpaceId,
+              groupId: prevGroupId,
+              prevSpaceId: spaceId,
+              prevGroupId: groupId,
+              spaceName,
+              showUndo: false,
+            }),
+        },
+      });
+    },
     onSettled: invalidate,
   });
 
@@ -334,6 +428,24 @@ export function useTasks() {
     deleteTask: (task: Task) =>
       isVirtualOccurrence(task) ? skipVirtual.mutate(task) : remove.mutate(task),
     moveTaskToGroup: (id: string, groupId: string | null) => move.mutate({ id, groupId }),
+    /** 다른 날로 이동(명시적) — due_date를 바꾸고 되돌리기 토스트를 띄운다. */
+    moveTaskToDate: (task: Task, dueDate: string) => {
+      if (dueDate === task.dueDate) return;
+      moveDate.mutate({ id: task.id, dueDate, prevDate: task.dueDate, showUndo: true });
+    },
+    /** 다른 공간으로 이동 — space_id 변경 + 그룹 초기화. 같은 공간이면 no-op(그룹 보존). */
+    moveTaskToSpace: (task: Task, spaceId: string, spaceName: string) => {
+      if (spaceId === task.spaceId) return;
+      moveSpace.mutate({
+        id: task.id,
+        spaceId,
+        groupId: null,
+        prevSpaceId: task.spaceId,
+        prevGroupId: task.groupId,
+        spaceName,
+        showUndo: true,
+      });
+    },
     /** 순서 변경: order.ts로 계산한 새 position 키를 저장(due_date 불변). */
     reorderTask: (id: string, position: string) => reorder.mutate({ id, position }),
   };

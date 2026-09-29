@@ -1,10 +1,10 @@
 import { useState, type PointerEvent as ReactPointerEvent } from 'react';
 import { motion, useMotionValue, useTransform, type PanInfo } from 'framer-motion';
-import { CheckCircle2, Circle, FolderInput, GripVertical, Repeat, Trash2, X } from 'lucide-react';
+import { ArrowRightLeft, CheckCircle2, Circle, GripVertical, Repeat, Trash2, X } from 'lucide-react';
 import type { Recurrence, RecurrenceRule, Task } from '@/db/types';
 import { isVirtualOccurrence } from '@/domain/recurrence';
 import { cn } from '@/lib/utils';
-import { GroupMovePopover, type GroupOption } from './GroupMovePopover';
+import { MoveTaskPopover, type TaskMoveProps } from './MoveTaskPopover';
 import { RecurrencePopover } from './RecurrencePopover';
 
 /** 반복 관리에 필요한 값 묶음(TaskList에서 아래로 흘려보낸다). */
@@ -22,10 +22,8 @@ type Props = {
   onToggle?: (task: Task) => void;
   onRename?: (task: Task, title: string) => void;
   onDelete?: (task: Task) => void;
-  /** 이동 대상이 될 그룹들 (넘기면 그룹 이동 버튼이 뜬다) */
-  groupOptions?: GroupOption[];
-  onMoveToGroup?: (taskId: string, groupId: string | null) => void;
-  onCreateGroupAndMove?: (taskId: string, name: string) => void;
+  /** 넘기면 통합 "이동"(날짜·공간·그룹) 버튼이 뜬다 */
+  moveProps?: TaskMoveProps;
   /** 반복 출신 항목의 규칙 아이콘·관리 팝오버용 */
   recurrenceProps?: RecurrenceProps;
   /** 세로 리오더용 좌측 핸들을 노출한다 (open 목록에서만) */
@@ -44,17 +42,15 @@ export function TaskItem({
   onToggle,
   onRename,
   onDelete,
-  groupOptions,
-  onMoveToGroup,
-  onCreateGroupAndMove,
+  moveProps,
   recurrenceProps,
   dragHandle,
   onDragHandlePointerDown,
 }: Props) {
   const done = task.completedAt != null;
-  // 가상 발생분은 아직 실체화 전이라 순서변경·그룹이동을 걸지 않는다(체크/삭제로 실체화된 뒤 가능).
+  // 가상 발생분은 아직 실체화 전이라 순서변경·이동을 걸지 않는다(체크/삭제로 실체화된 뒤 가능).
   const isVirtual = isVirtualOccurrence(task);
-  const canMove = !isVirtual && groupOptions != null && onMoveToGroup != null;
+  const canMove = !isVirtual && moveProps != null;
   const recurrence =
     task.recurrenceId != null && recurrenceProps
       ? recurrenceProps.recurrences.find((r) => r.id === task.recurrenceId) ?? null
@@ -201,17 +197,13 @@ export function TaskItem({
         )}
 
         {canMove && (
-          <GroupMovePopover
-            groups={groupOptions!}
-            currentGroupId={task.groupId}
-            onSelect={(groupId) => onMoveToGroup!(task.id, groupId)}
-            onCreate={
-              onCreateGroupAndMove ? (name) => onCreateGroupAndMove(task.id, name) : undefined
-            }
+          <MoveTaskPopover
+            task={task}
+            {...moveProps!}
             align="end"
-            triggerLabel="그룹 이동"
+            triggerLabel="이동"
             triggerClassName="shrink-0 rounded-md p-1 text-muted opacity-0 transition hover:text-accent focus-visible:opacity-100 group-hover:opacity-100 max-md:opacity-100"
-            trigger={<FolderInput className="size-4" />}
+            trigger={<ArrowRightLeft className="size-4" />}
           />
         )}
 
