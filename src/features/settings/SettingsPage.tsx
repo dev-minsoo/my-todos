@@ -2,6 +2,7 @@ import { Monitor, Moon, Sun } from 'lucide-react';
 import { useUiStore, type Theme } from '@/store/uiStore';
 import { cn } from '@/lib/utils';
 import { PageHeader } from '@/components/PageHeader';
+import { AccountSection } from '@/features/settings/AccountSection';
 
 const THEME_OPTIONS: { value: Theme; label: string; icon: typeof Monitor }[] = [
   { value: 'system', label: '시스템', icon: Monitor },
@@ -18,6 +19,8 @@ export function SettingsPage() {
       <PageHeader title="설정" />
       <div className="min-h-0 flex-1 overflow-y-auto px-4 py-6 md:px-8 md:py-8">
         <div className="mx-auto w-full max-w-xl space-y-4">
+          <AccountSection />
+
           <section className="rounded-2xl border border-border bg-surface p-5 shadow-card">
             <h2 className="text-sm font-medium">테마</h2>
             <p className="mt-0.5 text-xs text-muted">화면 밝기 모드를 고르세요.</p>

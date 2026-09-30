@@ -25,20 +25,32 @@ export function useAuth(): AuthState {
     }
 
     let mounted = true;
+    // 재익명 확보 중복 방지 가드 (SIGNED_OUT과 초기 로드가 겹치지 않게)
+    let ensuring = false;
+
+    async function ensureAnonymous() {
+      if (ensuring) return;
+      ensuring = true;
+      try {
+        const { data: anon, error: signInError } = await supabase.auth.signInAnonymously();
+        if (signInError) throw signInError;
+        if (mounted && anon.session) setSession(anon.session);
+      } catch (e) {
+        if (mounted) setError(e instanceof Error ? e.message : '로그인에 실패했습니다.');
+      } finally {
+        ensuring = false;
+      }
+    }
 
     (async () => {
       try {
         const { data } = await supabase.auth.getSession();
-        let current = data.session;
-        if (!current) {
-          const { data: anon, error: signInError } = await supabase.auth.signInAnonymously();
-          if (signInError) throw signInError;
-          current = anon.session;
+        if (!data.session) {
+          await ensureAnonymous();
+        } else if (mounted) {
+          setSession(data.session);
         }
-        if (mounted) {
-          setSession(current);
-          setLoading(false);
-        }
+        if (mounted) setLoading(false);
       } catch (e) {
         if (mounted) {
           setError(e instanceof Error ? e.message : '로그인에 실패했습니다.');
@@ -47,8 +59,11 @@ export function useAuth(): AuthState {
       }
     })();
 
-    const { data: sub } = supabase.auth.onAuthStateChange((_event, next) => {
-      if (mounted) setSession(next);
+    const { data: sub } = supabase.auth.onAuthStateChange((event, next) => {
+      if (!mounted) return;
+      setSession(next);
+      // 로그아웃되면 막다른 화면 대신 새 익명 세션을 자동으로 확보한다.
+      if (event === 'SIGNED_OUT' && !next) void ensureAnonymous();
     });
 
     return () => {

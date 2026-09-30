@@ -25,8 +25,9 @@ export function AuthGate({ children }: { children: ReactNode }) {
   }
 
   if (!session) {
+    // 로그아웃 직후 새 익명 세션을 확보하는 짧은 과도기 — 막다른 문구 대신 로딩 표시.
     return (
-      <div className="flex h-full items-center justify-center text-muted">세션이 없습니다.</div>
+      <div className="flex h-full items-center justify-center text-muted">불러오는 중…</div>
     );
   }
 
