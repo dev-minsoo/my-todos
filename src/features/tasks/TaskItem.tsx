@@ -116,7 +116,7 @@ export function TaskItem({
         dragMomentum={false}
         style={{ x }}
         onDragEnd={handleDragEnd}
-        className="group relative flex items-center gap-3 rounded-xl bg-surface px-3 py-2 transition hover:bg-surface2"
+        className="group relative flex items-center gap-3 rounded-xl bg-surface px-3 py-2.5 transition hover:bg-surface2"
       >
         {dragHandle && !isVirtual && (
           <button
@@ -207,10 +207,11 @@ export function TaskItem({
           />
         )}
 
+        {/* 삭제 X: 데스크톱은 hover/focus로 노출. 모바일은 왼쪽 스와이프로 삭제하므로 상시 노출하지 않는다(행 정돈). */}
         <button
           onClick={() => onDelete?.(task)}
           aria-label="삭제"
-          className="shrink-0 rounded-md p-1 text-muted opacity-0 transition hover:text-red-500 focus-visible:opacity-100 group-hover:opacity-100 max-md:opacity-100"
+          className="shrink-0 rounded-md p-1 text-muted opacity-0 transition hover:text-red-500 focus-visible:opacity-100 group-hover:opacity-100"
         >
           <X className="size-4" />
         </button>

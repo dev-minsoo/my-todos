@@ -3,7 +3,7 @@ import { format, parseISO } from 'date-fns';
 import { ko } from 'date-fns/locale';
 import { ChevronDown, ChevronLeft, ChevronRight } from 'lucide-react';
 import { useUiStore } from '@/store/uiStore';
-import { addDaysStr, todayStr } from '@/domain/dayBoundary';
+import { addDaysStr, daysBetween, todayStr } from '@/domain/dayBoundary';
 import { PopoverMenu } from '@/components/PopoverMenu';
 import { MiniCalendar } from '@/features/day/MiniCalendar';
 import { cn } from '@/lib/utils';
@@ -23,8 +23,13 @@ export function DayHeader() {
   const goToday = useUiStore((s) => s.goToday);
 
   const d = parseISO(viewedDate);
-  const rel = relativeLabel(viewedDate);
-  const main = format(d, 'M월 d일', { locale: ko });
+  const rel = relativeLabel(viewedDate); // 오늘/내일/어제 or null
+  // 근거리 라벨이 없으면(=먼 날짜) "N일 전/후"로 방향감을 준다. 음수=과거, 양수=미래.
+  const diff = daysBetween(todayStr(), viewedDate);
+  const far = rel == null ? `${Math.abs(diff)}일 ${diff < 0 ? '전' : '후'}` : null;
+  // 올해가 아니면 연도를 붙여 먼 과거/미래 혼동을 막는다.
+  const sameYear = d.getFullYear() === new Date().getFullYear();
+  const main = format(d, sameYear ? 'M월 d일' : 'yyyy년 M월 d일', { locale: ko });
   const weekday = format(d, 'EEEE', { locale: ko });
   const isToday = rel === '오늘';
 
@@ -74,6 +79,7 @@ export function DayHeader() {
               <span className="text-2xl font-semibold tracking-tight">{main}</span>
               <span className="text-base font-medium text-muted">{weekday}</span>
               {rel && <span className="text-base font-medium text-accent">{rel}</span>}
+              {far && <span className="text-base font-medium text-muted">{far}</span>}
               <ChevronDown className="size-4 self-center text-muted transition group-hover:text-text" />
             </>
           }

@@ -14,8 +14,10 @@ import {
   CheckCircle2,
   ChevronDown,
   ChevronRight,
+  CornerDownRight,
   Feather,
   Trash2,
+  type LucideIcon,
 } from 'lucide-react';
 import { ALL_TAB, type Group } from '@/db/types';
 import { useUiStore } from '@/store/uiStore';
@@ -108,6 +110,8 @@ export function TaskList() {
   const isEmpty = count.total === 0;
   const pct = count.total > 0 ? Math.round((count.done / count.total) * 100) : 0;
   const allDone = !isEmpty && count.done === count.total; // 오늘 다 끝냈을 때 축하 배너 조건
+  // 빈 오늘에도 헤더를 유지해 첫 항목 추가 시 레이아웃이 튀지 않게 한다(빈 과거 날은 EmptyState만).
+  const showHeader = !isEmpty || isToday;
 
   // 전체 탭에서는 공간별로 묶는다 (SPEC §82)
   const spaceGroupsView = isAll ? groupSectionsBySpace(dayTasks, spaces, viewedDate, today) : [];
@@ -146,20 +150,32 @@ export function TaskList() {
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      {!isEmpty && (
+      {showHeader && (
         <div className="flex items-center justify-between gap-4 border-b border-border px-5 py-3.5">
-          <div className="flex items-baseline gap-2">
-            <span className="text-sm font-medium">할 일</span>
-            <span className="text-xs text-muted">
-              {count.done}/{count.total} 완료
-            </span>
-          </div>
-          <div className="h-1.5 w-24 overflow-hidden rounded-full bg-surface2">
-            <div
-              className="h-full rounded-full bg-accent transition-all duration-300"
-              style={{ width: `${pct}%` }}
-            />
-          </div>
+          {isEmpty ? (
+            <>
+              <span className="text-sm text-muted">할 일</span>
+              <div className="h-1.5 w-28 overflow-hidden rounded-full bg-surface2" aria-hidden />
+            </>
+          ) : (
+            <>
+              <div className="flex items-baseline gap-1.5">
+                <span className="text-sm font-semibold tabular-nums">
+                  {count.done}/{count.total}
+                </span>
+                <span className="text-xs text-muted">완료</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="text-xs tabular-nums text-muted">{pct}%</span>
+                <div className="h-1.5 w-28 overflow-hidden rounded-full bg-surface2">
+                  <div
+                    className="h-full rounded-full bg-accent transition-all duration-300"
+                    style={{ width: `${pct}%` }}
+                  />
+                </div>
+              </div>
+            </>
+          )}
         </div>
       )}
 
@@ -280,15 +296,14 @@ function AllDoneBanner({ total }: { total: number }) {
       layout
       initial={{ opacity: 0, y: -6 }}
       animate={{ opacity: 1, y: 0 }}
-      className="mx-2 mb-1 mt-1 flex items-center gap-3 rounded-xl bg-accentSoft px-4 py-3"
+      className="mx-2 mb-1 mt-1 flex items-center gap-2.5 rounded-xl bg-accentSoft px-4 py-2.5"
     >
-      <span className="grid size-8 shrink-0 place-items-center rounded-full bg-accent text-accentFg">
-        <CheckCircle2 className="size-5" />
+      <span className="grid size-6 shrink-0 place-items-center rounded-full bg-accent text-accentFg">
+        <CheckCircle2 className="size-4" />
       </span>
-      <div className="min-w-0">
-        <p className="text-sm font-semibold text-accent">오늘 할 일을 다 끝냈어요 🎉</p>
-        <p className="text-xs text-muted">{total}개 모두 완료했습니다.</p>
-      </div>
+      <p className="min-w-0 truncate text-sm font-medium text-accent">
+        오늘 할 일을 다 끝냈어요 🎉 <span className="text-muted">· {total}개 완료</span>
+      </p>
     </motion.div>
   );
 }
@@ -473,7 +488,7 @@ function SectionsView({
   return (
     <>
       {sections.carried.length > 0 && (
-        <Section title="남은 일">
+        <Section title="남은 일" tone="carried" icon={CornerDownRight} count={sections.carried.length}>
           <AnimatePresence initial={false}>
             {sections.carried.map((t) => (
               <TaskItem
@@ -519,7 +534,7 @@ function SectionsView({
           </Section>
         ))}
       {/* 완료 섹션은 완료한 항목이 없어도 자리를 유지한다 (그날의 완료 영역이 늘 보이도록) */}
-      <Section title="완료">
+      <Section title="완료" tone="done" count={sections.completed.length}>
         {sections.completed.length > 0 ? (
           <AnimatePresence initial={false}>
             {sections.completed.map((t) => (
@@ -640,13 +655,38 @@ function ReorderRow({
   );
 }
 
-function Section({ title, children }: { title: string; children: ReactNode }) {
+function Section({
+  title,
+  count,
+  tone,
+  icon: Icon,
+  children,
+}: {
+  title: string;
+  /** 제목 옆 개수 (0이면 숨김) */
+  count?: number;
+  /** carried=넘어옴(따뜻한 강조), done=완료(살짝 후퇴) */
+  tone?: 'carried' | 'done';
+  icon?: LucideIcon;
+  children: ReactNode;
+}) {
+  const warm = tone === 'carried';
   return (
     <section className="px-2 py-1">
-      <h2 className="px-3 pb-1 pt-2 text-xs font-medium uppercase tracking-wide text-muted">
-        {title}
-      </h2>
-      <div className="flex flex-col gap-0.5">{children}</div>
+      <div className="flex items-center gap-1.5 px-3 pb-1 pt-2">
+        {Icon && <Icon className={cn('size-3.5', warm ? 'text-overdueFg' : 'text-muted')} />}
+        <h2
+          className={cn('text-xs font-medium tracking-wide', warm ? 'text-overdueFg' : 'text-muted')}
+        >
+          {title}
+        </h2>
+        {count != null && count > 0 && (
+          <span className={cn('text-xs tabular-nums', warm ? 'text-overdueFg' : 'text-muted')}>
+            {count}
+          </span>
+        )}
+      </div>
+      <div className={cn('flex flex-col gap-0.5', tone === 'done' && 'opacity-70')}>{children}</div>
     </section>
   );
 }
