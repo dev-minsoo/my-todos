@@ -20,6 +20,8 @@ type UiState = {
   lastGroupBySpace: Record<string, string | null>;
   /** 접어 둔 그룹 id 목록 */
   collapsedGroups: string[];
+  /** 접어 둔 공간 id 목록 ([전체] 탭에서 공간 단위로 접는다) */
+  collapsedSpaces: string[];
   /** 테마 선택 (기본: 시스템 따름) */
   theme: Theme;
   /** 데스크톱 사이드바 접힘 여부 (아이콘 레일) */
@@ -38,6 +40,7 @@ type UiState = {
   setLastSpaceId: (id: string) => void;
   setLastGroup: (spaceId: string, groupId: string | null) => void;
   toggleGroupCollapsed: (groupId: string) => void;
+  toggleSpaceCollapsed: (spaceId: string) => void;
   setTheme: (t: Theme) => void;
   toggleSidebar: () => void;
   setView: (v: AppView) => void;
@@ -53,6 +56,7 @@ export const useUiStore = create<UiState>()(
       lastSpaceId: null,
       lastGroupBySpace: {},
       collapsedGroups: [],
+      collapsedSpaces: [],
       theme: 'system',
       sidebarCollapsed: false,
       activeView: 'day',
@@ -72,6 +76,12 @@ export const useUiStore = create<UiState>()(
             ? s.collapsedGroups.filter((id) => id !== groupId)
             : [...s.collapsedGroups, groupId],
         })),
+      toggleSpaceCollapsed: (spaceId) =>
+        set((s) => ({
+          collapsedSpaces: s.collapsedSpaces.includes(spaceId)
+            ? s.collapsedSpaces.filter((id) => id !== spaceId)
+            : [...s.collapsedSpaces, spaceId],
+        })),
       setTheme: (t) => set({ theme: t }),
       toggleSidebar: () => set((s) => ({ sidebarCollapsed: !s.sidebarCollapsed })),
       setView: (v) => set({ activeView: v }),
@@ -87,6 +97,7 @@ export const useUiStore = create<UiState>()(
         lastSpaceId: s.lastSpaceId,
         lastGroupBySpace: s.lastGroupBySpace,
         collapsedGroups: s.collapsedGroups,
+        collapsedSpaces: s.collapsedSpaces,
         theme: s.theme,
         sidebarCollapsed: s.sidebarCollapsed,
       }),

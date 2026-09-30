@@ -29,7 +29,7 @@ import {
   groupSectionsBySpace,
   groupSectionsByGroup,
 } from '@/domain/sections';
-import type { DaySections, GroupBucket } from '@/domain/sections';
+import type { DaySections, GroupBucket, SpaceGroup } from '@/domain/sections';
 import { isVirtualOccurrence, virtualOccurrences } from '@/domain/recurrence';
 import type { Task } from '@/db/types';
 import { useActiveTab } from '@/features/spaces/useActiveTab';
@@ -189,27 +189,35 @@ export function TaskList() {
           isEmpty ? (
             <EmptyState isToday={isToday} />
           ) : (
-            spaceGroupsView.map((g) => (
-              <section key={g.spaceId} className="px-2 pb-1 pt-3 first:pt-1">
-                <div className="flex items-center gap-2 px-3 pb-0.5">
-                  <span
-                    className="size-2.5 shrink-0 rounded-full"
-                    style={{ background: g.color }}
-                    aria-hidden
-                  />
-                  <span className="text-sm font-semibold">{g.name}</span>
-                  <span className="text-xs text-muted">
-                    {g.count.done}/{g.count.total}
-                  </span>
-                </div>
-                <SectionsView
-                  sections={g.sections}
+            spaceGroupsView.map((sv) => {
+              // 각 공간의 살아있는 그룹(position 순). 그룹이 있으면 공간 안을 그룹으로 다시 나눈다.
+              const spGroups = groups
+                .filter((g) => g.spaceId === sv.spaceId)
+                .slice()
+                .sort(byPosition);
+              // 그룹 버킷: 빈 그룹은 감춰 개관을 가볍게 유지(관리는 각 공간 탭에서).
+              const spBuckets =
+                spGroups.length > 0
+                  ? groupSectionsByGroup(
+                      scoped.filter((t) => t.spaceId === sv.spaceId),
+                      spGroups.map((g) => ({ id: g.id, name: g.name })),
+                      viewedDate,
+                      today
+                    ).filter((b) => b.count.total > 0)
+                  : null;
+              return (
+                <SpaceSection
+                  key={sv.spaceId}
+                  space={sv}
+                  buckets={spBuckets}
+                  spaceGroups={spGroups}
                   moveProps={moveProps}
                   recurrenceProps={recurrenceProps}
+                  onRenameGroup={renameGroup}
                   {...handlers}
                 />
-              </section>
-            ))
+              );
+            })
           )
         ) : hasGroups ? (
           // 특정 공간 + 그룹 있음: 그룹별 접이식 섹션.
@@ -310,6 +318,88 @@ function AllDoneBanner({ total }: { total: number }) {
 
 type MoveProps = TaskMoveProps;
 
+/**
+ * [전체] 탭의 한 공간 묶음: 헤더(접기·색·이름·카운트) + 내용. 그룹처럼 접을 수 있다.
+ * 공간에 그룹이 있으면(`buckets`) 그 아래를 다시 그룹 소제목으로 나눠 보인다(그룹도 접기 가능).
+ * 그룹 관리(이름 수정·순서·삭제)는 개관을 가볍게 두려고 여기선 감추고, 해당 공간 탭에서만 한다.
+ */
+function SpaceSection({
+  space,
+  buckets,
+  spaceGroups,
+  moveProps,
+  recurrenceProps,
+  onRenameGroup,
+  onToggle,
+  onRename,
+  onDelete,
+}: {
+  space: SpaceGroup;
+  /** 그룹이 있는 공간의 그룹별 버킷(빈 그룹 제외). 그룹이 없으면 null → 평면 렌더. */
+  buckets: GroupBucket[] | null;
+  spaceGroups: Group[];
+  moveProps: MoveProps;
+  recurrenceProps?: RecurrenceProps;
+  onRenameGroup: (id: string, name: string) => void;
+} & SectionHandlers) {
+  const collapsed = useUiStore((s) => s.collapsedSpaces.includes(space.spaceId));
+  const toggleCollapsed = useUiStore((s) => s.toggleSpaceCollapsed);
+  return (
+    <section className="px-2 pb-1 pt-3 first:pt-1">
+      <button
+        onClick={() => toggleCollapsed(space.spaceId)}
+        aria-label={collapsed ? '펼치기' : '접기'}
+        aria-expanded={!collapsed}
+        className="flex w-full items-center gap-2 rounded-md px-1.5 py-0.5 text-left transition hover:bg-surface2"
+      >
+        <span className="grid size-5 shrink-0 place-items-center text-muted">
+          {collapsed ? <ChevronRight className="size-4" /> : <ChevronDown className="size-4" />}
+        </span>
+        <span
+          className="size-2.5 shrink-0 rounded-full"
+          style={{ background: space.color }}
+          aria-hidden
+        />
+        <span className="text-sm font-semibold">{space.name}</span>
+        <span className="text-xs text-muted">
+          {space.count.done}/{space.count.total}
+        </span>
+      </button>
+      {!collapsed &&
+        (buckets ? (
+          // 공간→그룹 2단 중첩: 그룹 소제목은 공간 헤더 아래로 살짝 들여쓴다.
+          <div className="pl-2">
+            {buckets.map((bucket) => (
+              <GroupSection
+                key={bucket.groupId ?? '__none__'}
+                bucket={bucket}
+                group={
+                  bucket.groupId ? spaceGroups.find((g) => g.id === bucket.groupId) ?? null : null
+                }
+                manageable={false}
+                moveProps={moveProps}
+                recurrenceProps={recurrenceProps}
+                onRenameGroup={onRenameGroup}
+                onToggle={onToggle}
+                onRename={onRename}
+                onDelete={onDelete}
+              />
+            ))}
+          </div>
+        ) : (
+          <SectionsView
+            sections={space.sections}
+            moveProps={moveProps}
+            recurrenceProps={recurrenceProps}
+            onToggle={onToggle}
+            onRename={onRename}
+            onDelete={onDelete}
+          />
+        ))}
+    </section>
+  );
+}
+
 type SectionHandlers = {
   onToggle: (task: Task) => void;
   onRename: (task: Task, title: string) => void;
@@ -330,6 +420,7 @@ function GroupSection({
   onDeleteGroup,
   onMoveUp,
   onMoveDown,
+  manageable = true,
 }: {
   bucket: GroupBucket;
   group: Group | null;
@@ -340,13 +431,16 @@ function GroupSection({
   onDeleteGroup?: () => void;
   onMoveUp?: () => void;
   onMoveDown?: () => void;
+  /** false면 그룹 관리(이름 수정·순서·삭제)를 감춘다 — [전체] 탭 개관용. 접기는 유지. */
+  manageable?: boolean;
 } & SectionHandlers) {
   const collapsed = useUiStore((s) => group != null && s.collapsedGroups.includes(group.id));
   const toggleCollapsed = useUiStore((s) => s.toggleGroupCollapsed);
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(group?.name ?? '');
 
-  const canManage = group != null;
+  const isReal = group != null;
+  const canManage = isReal && manageable;
 
   function commitName() {
     setEditing(false);
@@ -360,7 +454,7 @@ function GroupSection({
       <div className="group/head flex items-center gap-1.5 px-1.5 pb-0.5">
         <button
           onClick={() => group && toggleCollapsed(group.id)}
-          disabled={!canManage}
+          disabled={!isReal}
           aria-label={collapsed ? '펼치기' : '접기'}
           className="grid size-6 shrink-0 place-items-center rounded-md text-muted transition hover:bg-surface2 hover:text-text disabled:opacity-30"
         >
@@ -533,9 +627,9 @@ function SectionsView({
             </AnimatePresence>
           </Section>
         ))}
-      {/* 완료 섹션은 완료한 항목이 없어도 자리를 유지한다 (그날의 완료 영역이 늘 보이도록) */}
-      <Section title="완료" tone="done" count={sections.completed.length}>
-        {sections.completed.length > 0 ? (
+      {/* 완료한 항목이 있을 때만 완료 섹션을 보인다 (없으면 아예 감춘다) */}
+      {sections.completed.length > 0 && (
+        <Section title="완료" tone="done" count={sections.completed.length}>
           <AnimatePresence initial={false}>
             {sections.completed.map((t) => (
               <TaskItem
@@ -548,10 +642,8 @@ function SectionsView({
               />
             ))}
           </AnimatePresence>
-        ) : (
-          <p className="px-3 py-2 text-xs text-muted">아직 없어요</p>
-        )}
-      </Section>
+        </Section>
+      )}
     </>
   );
 }
