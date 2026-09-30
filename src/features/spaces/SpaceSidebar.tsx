@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
 import {
+  BarChart3,
   CalendarDays,
   Check,
   Layers,
@@ -132,6 +133,9 @@ export function SpaceSidebar() {
             <RailButton label="기록" active={activeView === 'calendar'} onClick={() => setView('calendar')}>
               <CalendarDays className="size-4" />
             </RailButton>
+            <RailButton label="리포트" active={activeView === 'report'} onClick={() => setView('report')}>
+              <BarChart3 className="size-4" />
+            </RailButton>
             <RailButton label="설정" active={activeView === 'settings'} onClick={() => setView('settings')}>
               <Settings className="size-4" />
             </RailButton>
@@ -148,6 +152,10 @@ export function SpaceSidebar() {
             <NavItem active={activeView === 'calendar'} onClick={() => setView('calendar')}>
               <CalendarDays className="size-4 shrink-0 text-muted" />
               <span>기록</span>
+            </NavItem>
+            <NavItem active={activeView === 'report'} onClick={() => setView('report')}>
+              <BarChart3 className="size-4 shrink-0 text-muted" />
+              <span>리포트</span>
             </NavItem>
             <NavItem active={activeView === 'settings'} onClick={() => setView('settings')}>
               <Settings className="size-4 shrink-0 text-muted" />

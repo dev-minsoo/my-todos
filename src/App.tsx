@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { lazy, Suspense, useEffect } from 'react';
 import { MotionConfig } from 'framer-motion';
 import { QueryProvider } from '@/providers/QueryProvider';
 import { AuthGate } from '@/features/auth/AuthGate';
@@ -13,6 +13,9 @@ import { DayHeader } from '@/features/day/DayHeader';
 import { TaskList } from '@/features/tasks/TaskList';
 import { TaskInput } from '@/features/tasks/TaskInput';
 import { useUiStore } from '@/store/uiStore';
+
+// 리포트는 차트 라이브러리(recharts)를 쓰므로 코드 분할 — 진입할 때만 로드한다.
+const ReportPage = lazy(() => import('@/features/report/ReportPage'));
 
 export default function App() {
   const theme = useUiStore((s) => s.theme);
@@ -53,6 +56,12 @@ export default function App() {
                 <CalendarPage />
               ) : activeView === 'search' ? (
                 <SearchPage />
+              ) : activeView === 'report' ? (
+                <Suspense
+                  fallback={<p className="p-8 text-center text-sm text-muted">불러오는 중…</p>}
+                >
+                  <ReportPage />
+                </Suspense>
               ) : (
                 <div className="flex h-full flex-col px-4 py-6 md:px-8 md:py-8">
                   <DayHeader />
