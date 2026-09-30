@@ -13,7 +13,7 @@ function pct(rate: number): number {
 }
 
 /** 'YYYY-MM-DD' → 일(숫자) 문자열 (차트 x축용) */
-function dayTick(date: string): string {
+function formatDayLabel(date: string): string {
   return String(Number(date.slice(8, 10)));
 }
 
@@ -23,7 +23,7 @@ export default function ReportPage() {
 
   const hasActivity = summary.completed > 0;
   // 막대가 많으면 x축 눈금을 솎는다(달 = 30여 개).
-  const tickInterval = activity.length > 14 ? Math.floor(activity.length / 10) : 0;
+  const labelInterval = activity.length > 14 ? Math.floor(activity.length / 10) : 0;
 
   return (
     <div className="flex h-full flex-col">
@@ -62,8 +62,8 @@ export default function ReportPage() {
                       <BarChart data={activity} margin={{ top: 4, right: 4, bottom: 0, left: -24 }}>
                         <XAxis
                           dataKey="date"
-                          tickFormatter={dayTick}
-                          interval={tickInterval}
+                          tickFormatter={formatDayLabel}
+                          interval={labelInterval}
                           tickLine={false}
                           axisLine={false}
                           tick={{ fontSize: 11, fill: 'currentColor', opacity: 0.55 }}

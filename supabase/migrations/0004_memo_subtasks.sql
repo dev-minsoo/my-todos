@@ -1,4 +1,4 @@
--- Tick v0.x: 메모 + 서브태스크
+-- My Todos v0.x: 메모 + 서브태스크
 -- 적용 방법 (0001~0003과 동일):
 --   A) Supabase 대시보드 > SQL Editor 에 이 파일 전체를 붙여넣고 실행
 --   B) supabase CLI: `supabase db push` (프로젝트는 `npm run db:push`)

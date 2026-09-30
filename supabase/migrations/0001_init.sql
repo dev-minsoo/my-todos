@@ -1,4 +1,4 @@
--- Tick v0.1 초기 스키마
+-- My Todos v0.1 초기 스키마
 -- 적용 방법 (둘 중 하나):
 --   A) Supabase 대시보드 > SQL Editor 에 이 파일 전체를 붙여넣고 실행
 --   B) supabase CLI: `supabase db push` (마이그레이션으로 관리)

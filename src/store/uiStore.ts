@@ -124,7 +124,7 @@ export const useUiStore = create<UiState>()(
         })),
     }),
     {
-      name: 'tick-ui',
+      name: 'my-todos-ui',
       // viewedDate·activeView·모달 상태는 저장하지 않는다 → 열 때마다 오늘·하루 화면으로 시작
       partialize: (s) => ({
         currentTab: s.currentTab,

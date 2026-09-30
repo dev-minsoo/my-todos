@@ -1,4 +1,4 @@
--- Tick v0.x: 반복(recurring) 할 일 규칙
+-- My Todos v0.x: 반복(recurring) 할 일 규칙
 -- 적용 방법 (0001/0002와 동일):
 --   A) Supabase 대시보드 > SQL Editor 에 이 파일 전체를 붙여넣고 실행
 --   B) supabase CLI: `supabase db push`

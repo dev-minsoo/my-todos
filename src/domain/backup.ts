@@ -3,7 +3,7 @@
 import type { Group, Recurrence, RecurrenceRule, Space, Task } from '@/db/types';
 import { parseRule } from '@/domain/recurrence';
 
-export const BACKUP_APP = 'tick';
+export const BACKUP_APP = 'my-todos';
 export const BACKUP_VERSION = 1;
 
 /** 살아있는 데이터의 스냅샷(내보내기 대상). */
@@ -38,7 +38,7 @@ export function buildBackup(data: BackupData): BackupFile {
 
 export function parseBackup(raw: unknown): BackupData {
   if (!isRecord(raw)) throw new Error('백업 파일 형식이 올바르지 않아요.');
-  if (raw.app !== BACKUP_APP) throw new Error('Tick 백업 파일이 아니에요.');
+  if (raw.app !== BACKUP_APP) throw new Error('My Todos 백업 파일이 아니에요.');
   if (raw.version !== BACKUP_VERSION) throw new Error('지원하지 않는 백업 버전이에요.');
 
   const data = raw.data;

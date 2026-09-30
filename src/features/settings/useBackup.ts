@@ -90,7 +90,7 @@ export function useBackup() {
     try {
       const data = await fetchAll();
       const json = JSON.stringify(buildBackup(data), null, 2);
-      triggerDownload(`tick-backup-${format(new Date(), 'yyyy-MM-dd')}.json`, json);
+      triggerDownload(`my-todos-backup-${format(new Date(), 'yyyy-MM-dd')}.json`, json);
       const count = data.spaces.length + data.tasks.length;
       toast(count > 0 ? '백업 파일을 내려받았어요.' : '아직 내보낼 데이터가 없어요.');
     } catch (e) {

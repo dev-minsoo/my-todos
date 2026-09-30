@@ -96,7 +96,7 @@ describe('buildBackup', () => {
 
 describe('parseBackup', () => {
   const validFile = () => ({
-    app: 'tick',
+    app: BACKUP_APP,
     version: 1,
     exportedAt: '2026-09-30T00:00:00.000Z',
     data: {
@@ -130,8 +130,10 @@ describe('parseBackup', () => {
     expect(() => parseBackup([])).toThrow('백업 파일 형식이 올바르지 않아요.');
   });
 
-  it('Tick 백업이 아니면 거절한다', () => {
-    expect(() => parseBackup({ ...validFile(), app: 'other' })).toThrow('Tick 백업 파일이 아니에요.');
+  it('다른 앱 백업은 거절한다', () => {
+    expect(() => parseBackup({ ...validFile(), app: 'other' })).toThrow(
+      'My Todos 백업 파일이 아니에요.'
+    );
   });
 
   it('지원하지 않는 버전은 거절한다', () => {

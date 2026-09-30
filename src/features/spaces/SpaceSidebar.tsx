@@ -51,7 +51,7 @@ export function SpaceSidebar() {
             <span className="grid size-7 place-items-center rounded-lg bg-accent text-accentFg">
               <Check className="size-4" strokeWidth={3} />
             </span>
-            <span className="text-lg font-semibold tracking-tight">Tick</span>
+            <span className="text-lg font-semibold tracking-tight">My Todos</span>
           </div>
         )}
         <button

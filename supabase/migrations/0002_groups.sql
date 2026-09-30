@@ -1,4 +1,4 @@
--- Tick v0.x: 공간 안의 "그룹"(하위 묶음) 추가
+-- My Todos v0.x: 공간 안의 "그룹"(하위 묶음) 추가
 -- 적용 방법 (0001과 동일):
 --   A) Supabase 대시보드 > SQL Editor 에 이 파일 전체를 붙여넣고 실행
 --   B) supabase CLI: `supabase db push`
