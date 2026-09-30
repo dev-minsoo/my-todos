@@ -10,6 +10,8 @@ export type Task = {
   dueDate: string; // 'YYYY-MM-DD'
   completedAt: string | null; // ISO, null = 할 일
   position: string; // fractional index (v0.1: created_at 순)
+  memo: string | null; // 자유 메모, null = 없음 (최상위 task에만)
+  parentId: string | null; // 서브태스크면 부모 task id, null = 최상위
   recurrenceId: string | null; // 이 할 일을 낳은 반복 규칙, null = 반복에서 나온 것 아님
   createdAt: string; // ISO
   updatedAt: string; // ISO

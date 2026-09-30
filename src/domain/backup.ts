@@ -101,6 +101,8 @@ export type TaskInsert = {
   due_date: string;
   completed_at: string | null;
   position: string;
+  memo: string | null;
+  parent_id: string | null;
   recurrence_id: string | null;
   created_at?: string;
   deleted_at: null;
@@ -127,9 +129,14 @@ export function remapForImport(
   const spaceIdMap = new Map<string, string>();
   const groupIdMap = new Map<string, string>();
   const recIdMap = new Map<string, string>();
+  const taskIdMap = new Map<string, string>();
   for (const s of data.spaces) if (!spaceIdMap.has(s.id)) spaceIdMap.set(s.id, newId());
   for (const g of data.groups) if (!groupIdMap.has(g.id)) groupIdMap.set(g.id, newId());
   for (const r of data.recurrences) if (!recIdMap.has(r.id)) recIdMap.set(r.id, newId());
+  // 서브태스크가 parent_id로 task를 참조하므로 task도 미리 새 id를 부여해 둔다.
+  // 살아남는 task(공간이 남는)만 매핑 → 드롭되는 부모를 참조하면 그 자식도 같은 공간이라 함께 드롭됨.
+  for (const t of data.tasks)
+    if (spaceIdMap.has(t.spaceId) && !taskIdMap.has(t.id)) taskIdMap.set(t.id, newId());
 
   const withCreatedAt = (createdAt: string) => (createdAt ? { created_at: createdAt } : {});
 
@@ -173,7 +180,7 @@ export function remapForImport(
   const tasks: TaskInsert[] = data.tasks
     .filter((t) => spaceIdMap.has(t.spaceId))
     .map((t) => ({
-      id: newId(), // task를 참조하는 것이 없어 매핑 테이블 불필요
+      id: taskIdMap.get(t.id)!,
       user_id: userId,
       space_id: spaceIdMap.get(t.spaceId)!,
       group_id: t.groupId != null ? recMapOrNull(groupIdMap, t.groupId) : null,
@@ -181,6 +188,9 @@ export function remapForImport(
       due_date: t.dueDate,
       completed_at: t.completedAt,
       position: t.position,
+      memo: t.memo,
+      // 부모가 드롭됐거나 참조가 깨졌으면 null(최상위로 승격) — 고아 방지.
+      parent_id: t.parentId != null ? recMapOrNull(taskIdMap, t.parentId) : null,
       recurrence_id: t.recurrenceId != null ? recMapOrNull(recIdMap, t.recurrenceId) : null,
       ...withCreatedAt(t.createdAt),
       deleted_at: null,
@@ -282,6 +292,8 @@ function normalizeTask(raw: unknown): Task {
     dueDate: reqStr(r, 'dueDate'),
     completedAt: nullableStr(r, 'completedAt'),
     position: optStr(r, 'position'),
+    memo: nullableStr(r, 'memo'),
+    parentId: nullableStr(r, 'parentId'),
     recurrenceId: nullableStr(r, 'recurrenceId'),
     createdAt: optStr(r, 'createdAt'),
     updatedAt: optStr(r, 'updatedAt'),

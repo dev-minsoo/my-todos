@@ -62,6 +62,8 @@ function task(over: Partial<Task> = {}): Task {
     dueDate: '2026-09-15',
     completedAt: null,
     position: '1',
+    memo: null,
+    parentId: null,
     recurrenceId: null,
     createdAt: '2026-09-15T08:00:00.000Z',
     updatedAt: '2026-09-15T08:00:00.000Z',

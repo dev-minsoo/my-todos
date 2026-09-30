@@ -66,6 +66,8 @@ function task(over: Partial<Task> = {}): Task {
     dueDate: '2026-09-30',
     completedAt: null,
     position: '0000000001',
+    memo: null,
+    parentId: null,
     recurrenceId: null,
     createdAt: '2026-09-01T00:00:00.000Z',
     updatedAt: '2026-09-01T00:00:00.000Z',
@@ -231,5 +233,36 @@ describe('remapForImport', () => {
     const t1 = out.tasks.find((t) => t.title === '할 일')!;
     expect(t1.completed_at).toBe('2026-09-10T00:00:00.000Z');
     expect(t1.due_date).toBe('2026-09-30');
+  });
+
+  it('서브태스크의 parent_id를 부모의 새 id로 다시 잇고 memo를 보존한다', () => {
+    const data: BackupData = {
+      spaces: [space({ id: 's1' })],
+      groups: [],
+      recurrences: [],
+      tasks: [
+        task({ id: 'p1', spaceId: 's1', title: '부모', memo: '메모 내용' }),
+        task({ id: 'c1', spaceId: 's1', parentId: 'p1', title: '자식' }),
+      ],
+    };
+    const out = remapForImport(data, counter(), userId);
+    const parent = out.tasks.find((t) => t.title === '부모')!;
+    const child = out.tasks.find((t) => t.title === '자식')!;
+    expect(parent.parent_id).toBeNull();
+    expect(parent.memo).toBe('메모 내용');
+    expect(child.parent_id).toBe(parent.id); // 새 부모 id로 재매핑
+    expect(child.parent_id).not.toBe('p1'); // 원본 id는 남지 않는다
+  });
+
+  it('부모가 없는(참조가 깨진) 서브태스크는 최상위로 승격한다(parent_id=null)', () => {
+    const data: BackupData = {
+      spaces: [space({ id: 's1' })],
+      groups: [],
+      recurrences: [],
+      tasks: [task({ id: 'c1', spaceId: 's1', parentId: 'ghost', title: '고아' })],
+    };
+    const out = remapForImport(data, counter(), userId);
+    expect(out.tasks).toHaveLength(1);
+    expect(out.tasks[0].parent_id).toBeNull();
   });
 });

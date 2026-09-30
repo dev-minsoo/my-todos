@@ -22,6 +22,8 @@ function mkTask(p: Partial<Task>): Task {
     dueDate: '2026-09-10',
     completedAt: null,
     position: '1',
+    memo: null,
+    parentId: null,
     recurrenceId: null,
     createdAt: '2026-09-10T00:00:00',
     updatedAt: '2026-09-10T00:00:00',

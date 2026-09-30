@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { getDay, parseISO } from 'date-fns';
 import { ArrowUp, ChevronDown, Folder, Plus, Repeat } from 'lucide-react';
 import { ALL_TAB, type RecurrenceRule } from '@/db/types';
@@ -29,6 +29,11 @@ export function TaskInput() {
   const setLastSpaceId = useUiStore((s) => s.setLastSpaceId);
   const lastGroupBySpace = useUiStore((s) => s.lastGroupBySpace);
   const setLastGroup = useUiStore((s) => s.setLastGroup);
+  // n 단축키: nonce가 바뀌면 입력칸에 포커스 (초기 0은 무시)
+  const focusInputNonce = useUiStore((s) => s.focusInputNonce);
+  useEffect(() => {
+    if (focusInputNonce > 0) inputRef.current?.focus();
+  }, [focusInputNonce]);
 
   const { activeTab, spaces } = useActiveTab();
   const { groups, createGroup } = useGroups();

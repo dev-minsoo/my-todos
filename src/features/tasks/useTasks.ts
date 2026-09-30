@@ -1,3 +1,4 @@
+import { useMemo } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { format, parseISO } from 'date-fns';
 import { ko } from 'date-fns/locale';
@@ -105,7 +106,22 @@ export function useTasks() {
   const nextTaskPosition = (spaceId: string, groupId: string | null): string => {
     const all = qc.getQueryData<Task[]>(key) ?? [];
     const positions = all
-      .filter((t) => t.deletedAt == null && t.spaceId === spaceId && (t.groupId ?? null) === groupId)
+      .filter(
+        (t) =>
+          t.deletedAt == null &&
+          t.parentId == null && // 서브태스크는 부모의 버킷 순서에 끼지 않는다
+          t.spaceId === spaceId &&
+          (t.groupId ?? null) === groupId
+      )
+      .map((t) => t.position);
+    return positionAfter(maxValidPosition(positions));
+  };
+
+  // 한 부모 아래 서브태스크들의 맨 끝 다음 position.
+  const nextSubtaskPosition = (parentId: string): string => {
+    const all = qc.getQueryData<Task[]>(key) ?? [];
+    const positions = all
+      .filter((t) => t.deletedAt == null && t.parentId === parentId)
       .map((t) => t.position);
     return positionAfter(maxValidPosition(positions));
   };
@@ -139,6 +155,8 @@ export function useTasks() {
         dueDate,
         completedAt: null,
         position,
+        memo: null,
+        parentId: null,
         recurrenceId: null,
         createdAt: now,
         updatedAt: now,
@@ -148,6 +166,67 @@ export function useTasks() {
       return ctx;
     },
     onError: (e, _v, ctx) => rollback(e, ctx, '추가하지 못했습니다.'),
+    onSettled: invalidate,
+  });
+
+  // 서브태스크 추가 — 부모의 공간·그룹·날짜를 물려받고 parent_id를 세팅한다.
+  // 서브태스크도 그냥 task 행이라 toggle/rename/remove(+Undo)를 그대로 재사용한다(새 개념 아님).
+  const addSub = useMutation<Task, unknown, { parent: Task; title: string; position: string }, Ctx>({
+    mutationFn: async ({ parent, title, position }) => {
+      const { data, error } = await supabase
+        .from('tasks')
+        .insert({
+          user_id: userId,
+          space_id: parent.spaceId,
+          group_id: parent.groupId,
+          due_date: parent.dueDate,
+          parent_id: parent.id,
+          title,
+          position,
+        })
+        .select('*')
+        .single();
+      if (error) throw error;
+      return toTask(data as TaskRow);
+    },
+    onMutate: async ({ parent, title, position }) => {
+      const ctx = await snapshot();
+      const now = new Date().toISOString();
+      const optimistic: Task = {
+        id: `temp-${crypto.randomUUID()}`,
+        userId,
+        spaceId: parent.spaceId,
+        groupId: parent.groupId,
+        title,
+        dueDate: parent.dueDate,
+        completedAt: null,
+        position,
+        memo: null,
+        parentId: parent.id,
+        recurrenceId: null,
+        createdAt: now,
+        updatedAt: now,
+        deletedAt: null,
+      };
+      patch((p) => [...p, optimistic]);
+      return ctx;
+    },
+    onError: (e, _v, ctx) => rollback(e, ctx, '하위 항목을 추가하지 못했습니다.'),
+    onSettled: invalidate,
+  });
+
+  // 메모 편집 — 빈 문자열은 null로 저장(입력칸 호출부에서 trim). due_date·상태 불변.
+  const memoMut = useMutation<void, unknown, { id: string; memo: string | null }, Ctx>({
+    mutationFn: async ({ id, memo }) => {
+      const { error } = await supabase.from('tasks').update({ memo }).eq('id', id);
+      if (error) throw error;
+    },
+    onMutate: async ({ id, memo }) => {
+      const ctx = await snapshot();
+      patch((p) => p.map((t) => (t.id === id ? { ...t, memo } : t)));
+      return ctx;
+    },
+    onError: (e, _v, ctx) => rollback(e, ctx, '메모를 저장하지 못했습니다.'),
     onSettled: invalidate,
   });
 
@@ -296,7 +375,11 @@ export function useTasks() {
 
   const restore = useMutation<void, unknown, string>({
     mutationFn: async (id) => {
-      const { error } = await supabase.from('tasks').update({ deleted_at: null }).eq('id', id);
+      // 부모를 되살리면 함께 삭제됐던 서브태스크(parent_id=id)도 같이 되살린다.
+      const { error } = await supabase
+        .from('tasks')
+        .update({ deleted_at: null })
+        .or(`id.eq.${id},parent_id.eq.${id}`);
       if (error) throw error;
     },
     // 되살리면 건너뜀 표식이 사라지므로(살아나거나 목록으로 복귀) 두 캐시 모두 갱신.
@@ -308,15 +391,16 @@ export function useTasks() {
 
   const remove = useMutation<void, unknown, Task, Ctx>({
     mutationFn: async (task) => {
+      // 부모를 지우면 서브태스크(parent_id=task.id)도 함께 소프트 삭제한다.
       const { error } = await supabase
         .from('tasks')
         .update({ deleted_at: new Date().toISOString() })
-        .eq('id', task.id);
+        .or(`id.eq.${task.id},parent_id.eq.${task.id}`);
       if (error) throw error;
     },
     onMutate: async (task) => {
       const ctx = await snapshot();
-      patch((p) => p.filter((t) => t.id !== task.id));
+      patch((p) => p.filter((t) => t.id !== task.id && t.parentId !== task.id));
       return ctx;
     },
     onError: (e, _v, ctx) => rollback(e, ctx, '삭제하지 못했습니다.'),
@@ -412,8 +496,30 @@ export function useTasks() {
     onSettled: invalidateSkips,
   });
 
+  // 최상위 task만 노출한다(서브태스크는 아래 subtasksByParent로 분리) — 검색·리포트·달력·
+  // 섹션 등 모든 소비처가 useTasks().tasks 하나를 공유하므로 여기서 한 번만 나누면 무영향.
+  // ref 안정성을 위해 memoize(매 렌더 새 배열이면 하위 memo가 다 깨진다).
+  const parentTasks = useMemo(
+    () => (query.data ?? []).filter((t) => t.parentId == null),
+    [query.data]
+  );
+  const subtasksByParent = useMemo(() => {
+    const map = new Map<string, Task[]>();
+    for (const t of query.data ?? []) {
+      if (t.parentId == null) continue;
+      const arr = map.get(t.parentId);
+      if (arr) arr.push(t);
+      else map.set(t.parentId, [t]);
+    }
+    for (const arr of map.values())
+      arr.sort((a, b) => (a.position < b.position ? -1 : a.position > b.position ? 1 : 0));
+    return map;
+  }, [query.data]);
+
   return {
-    tasks: query.data ?? [],
+    tasks: parentTasks,
+    /** 부모 id → 그 아래 서브태스크 목록(position 정렬). TaskItem 펼침 패널에서 쓴다. */
+    subtasksByParent,
     /** 그날 "건너뜀"으로 남은 소프트 삭제 표식. virtualOccurrences 감지용으로만 쓴다. */
     recurrenceSkips: skipQuery.data ?? [],
     isLoading: query.isLoading,
@@ -448,5 +554,10 @@ export function useTasks() {
     },
     /** 순서 변경: order.ts로 계산한 새 position 키를 저장(due_date 불변). */
     reorderTask: (id: string, position: string) => reorder.mutate({ id, position }),
+    /** 서브태스크 추가 — 부모 아래 맨 끝에 붙인다. */
+    addSubtask: (parent: Task, title: string) =>
+      addSub.mutate({ parent, title, position: nextSubtaskPosition(parent.id) }),
+    /** 메모 저장 — 빈 값은 null로 지운다. */
+    updateMemo: (id: string, memo: string) => memoMut.mutate({ id, memo: memo.trim() || null }),
   };
 }

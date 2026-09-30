@@ -14,6 +14,8 @@ function makeTask(partial: Partial<Task>): Task {
     dueDate: '2026-09-28',
     completedAt: null,
     position: 'a0',
+    memo: null,
+    parentId: null,
     recurrenceId: null,
     createdAt: `2026-09-28T00:00:0${seq % 10}`,
     updatedAt: '2026-09-28T00:00:00',

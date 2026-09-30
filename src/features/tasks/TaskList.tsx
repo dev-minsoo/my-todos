@@ -14,12 +14,14 @@ import {
   CheckCircle2,
   ChevronDown,
   ChevronRight,
+  ChevronsDownUp,
+  ChevronsUpDown,
   CornerDownRight,
   Feather,
   Trash2,
   type LucideIcon,
 } from 'lucide-react';
-import { ALL_TAB, type Group } from '@/db/types';
+import { ALL_TAB, type Group, type TabId } from '@/db/types';
 import { useUiStore } from '@/store/uiStore';
 import { todayStr } from '@/domain/dayBoundary';
 import { positionBetween } from '@/domain/order';
@@ -40,7 +42,9 @@ import { moveItem } from '@/features/spaces/spaceSelection';
 import { cn } from '@/lib/utils';
 import type { GroupOption } from './GroupMovePopover';
 import type { TaskMoveProps } from './MoveTaskPopover';
-import { TaskItem, type RecurrenceProps } from './TaskItem';
+import { TaskItem, type RecurrenceProps, type TaskDetailProps } from './TaskItem';
+import { TaskDetailModal } from './TaskDetailModal';
+import { useDayShortcuts } from './useDayShortcuts';
 import { useTasks } from './useTasks';
 
 const byPosition = (a: Group, b: Group) =>
@@ -48,16 +52,26 @@ const byPosition = (a: Group, b: Group) =>
 
 export function TaskList() {
   const viewedDate = useUiStore((s) => s.viewedDate);
+  const setCurrentTab = useUiStore((s) => s.setCurrentTab);
+  // 상세 정보 모달: 항목 제목 클릭으로 열린다(읽기 전용). store 기반이라 프롭 스레딩 없이 한 곳에서 렌더.
+  const detailTaskId = useUiStore((s) => s.detailTaskId);
+  const setDetailTaskId = useUiStore((s) => s.setDetailTaskId);
+  // 헤더의 전체 펼치기/접기 — 공간·그룹 섹션을 한 번에 연다/닫는다(할 일 메모·하위 패널은 대상 아님).
+  const collapseAll = useUiStore((s) => s.collapseAll);
+  const expandAll = useUiStore((s) => s.expandAll);
 
   const userId = useUserId();
   const { activeTab, spaces } = useActiveTab();
   const {
     tasks,
+    subtasksByParent,
     recurrenceSkips,
     isLoading,
     toggleTask,
     renameTask,
     deleteTask,
+    addSubtask,
+    updateMemo,
     moveTaskToGroup,
     moveTaskToDate,
     moveTaskToSpace,
@@ -88,6 +102,22 @@ export function TaskList() {
     onUpdate: updateRecurrence,
     onStop: removeRecurrence,
   };
+
+  // 메모·서브태스크 값 묶음 — recurrenceProps와 같은 경로로 항목까지 흘려보낸다.
+  const detailProps: TaskDetailProps = {
+    subtasksByParent,
+    onAddSubtask: addSubtask,
+    onEditMemo: (task, memo) => updateMemo(task.id, memo),
+  };
+
+  // 1..n 탭 전환 순서: 공간이 2개 이상이면 [전체]를 앞에 둔다(SpaceTabs/사이드바 노출 규칙과 동일).
+  const tabIds = useMemo<TabId[]>(
+    () => [...(spaces.length >= 2 ? [ALL_TAB] : []), ...spaces.map((s) => s.id)],
+    [spaces]
+  );
+
+  // 하루 화면 키보드 단축키(n·j/k·x·e·1..n·Esc). ←/→는 DayHeader가 담당.
+  useDayShortcuts({ dayTasks, toggleTask, tabIds, setCurrentTab });
 
   // 이름 수정 라우팅: 반복 출신이면 시리즈 제목을 고치고(습관은 "매일 같은 것"),
   // 이미 실체화된 실제 행이면 그 행 제목도 함께 바꾼다. 일반 항목은 그대로.
@@ -125,6 +155,14 @@ export function TaskList() {
   const buckets: GroupBucket[] = hasGroups
     ? groupSectionsByGroup(scoped, groupOptions, viewedDate, today)
     : [];
+
+  // 전체 접기/펼치기 대상: [전체] 탭은 공간 섹션, 특정 공간 탭은 그 공간의 그룹 섹션.
+  // (평면 뷰 — 그룹 없는 단일 공간 — 는 접을 게 없어 버튼을 숨긴다.)
+  const collapseTargets = isAll
+    ? { spaceIds: spaceGroupsView.map((sv) => sv.spaceId), groupIds: [] as string[] }
+    : { spaceIds: [] as string[], groupIds: spaceGroups.map((g) => g.id) };
+  const showCollapseControls =
+    collapseTargets.spaceIds.length + collapseTargets.groupIds.length > 0;
 
   const handlers = { onToggle: toggleTask, onRename: handleRename, onDelete: deleteTask };
 
@@ -166,6 +204,29 @@ export function TaskList() {
                 <span className="text-xs text-muted">완료</span>
               </div>
               <div className="flex items-center gap-2">
+                {/* 전체 펼치기/접기: 공간·그룹 섹션을 한 번에 연다/닫는다(현재 뷰의 섹션만). */}
+                {showCollapseControls && (
+                  <div className="flex items-center">
+                    <button
+                      type="button"
+                      onClick={() => expandAll(collapseTargets.spaceIds, collapseTargets.groupIds)}
+                      aria-label="전체 펼치기"
+                      title="전체 펼치기"
+                      className="rounded-md p-1 text-muted transition hover:text-text"
+                    >
+                      <ChevronsUpDown className="size-4" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => collapseAll(collapseTargets.spaceIds, collapseTargets.groupIds)}
+                      aria-label="전체 접기"
+                      title="전체 접기"
+                      className="rounded-md p-1 text-muted transition hover:text-text"
+                    >
+                      <ChevronsDownUp className="size-4" />
+                    </button>
+                  </div>
+                )}
                 <span className="text-xs tabular-nums text-muted">{pct}%</span>
                 <div className="h-1.5 w-28 overflow-hidden rounded-full bg-surface2">
                   <div
@@ -213,6 +274,7 @@ export function TaskList() {
                   spaceGroups={spGroups}
                   moveProps={moveProps}
                   recurrenceProps={recurrenceProps}
+                  detailProps={detailProps}
                   onRenameGroup={renameGroup}
                   {...handlers}
                 />
@@ -242,6 +304,7 @@ export function TaskList() {
                   group={group ?? null}
                   moveProps={moveProps}
                   recurrenceProps={recurrenceProps}
+                  detailProps={detailProps}
                   onRenameGroup={renameGroup}
                   onDeleteGroup={group ? () => deleteGroup(group) : undefined}
                   onMoveUp={group && idx > 0 ? () => reorderAt(idx, idx - 1) : undefined}
@@ -265,11 +328,21 @@ export function TaskList() {
               reorder={reorderCtl}
               moveProps={moveProps}
               recurrenceProps={recurrenceProps}
+              detailProps={detailProps}
               {...handlers}
             />
           </div>
         )}
       </div>
+
+      <TaskDetailModal
+        taskId={detailTaskId}
+        tasks={dayTasks}
+        spaces={spaces}
+        groups={groups}
+        subtasksByParent={subtasksByParent}
+        onClose={() => setDetailTaskId(null)}
+      />
     </div>
   );
 }
@@ -329,6 +402,7 @@ function SpaceSection({
   spaceGroups,
   moveProps,
   recurrenceProps,
+  detailProps,
   onRenameGroup,
   onToggle,
   onRename,
@@ -340,6 +414,7 @@ function SpaceSection({
   spaceGroups: Group[];
   moveProps: MoveProps;
   recurrenceProps?: RecurrenceProps;
+  detailProps?: TaskDetailProps;
   onRenameGroup: (id: string, name: string) => void;
 } & SectionHandlers) {
   const collapsed = useUiStore((s) => s.collapsedSpaces.includes(space.spaceId));
@@ -379,6 +454,7 @@ function SpaceSection({
                 manageable={false}
                 moveProps={moveProps}
                 recurrenceProps={recurrenceProps}
+                detailProps={detailProps}
                 onRenameGroup={onRenameGroup}
                 onToggle={onToggle}
                 onRename={onRename}
@@ -391,6 +467,7 @@ function SpaceSection({
             sections={space.sections}
             moveProps={moveProps}
             recurrenceProps={recurrenceProps}
+            detailProps={detailProps}
             onToggle={onToggle}
             onRename={onRename}
             onDelete={onDelete}
@@ -412,6 +489,7 @@ function GroupSection({
   group,
   moveProps,
   recurrenceProps,
+  detailProps,
   reorder,
   onToggle,
   onRename,
@@ -426,6 +504,7 @@ function GroupSection({
   group: Group | null;
   moveProps: MoveProps;
   recurrenceProps?: RecurrenceProps;
+  detailProps?: TaskDetailProps;
   reorder?: ReorderCommit;
   onRenameGroup: (id: string, name: string) => void;
   onDeleteGroup?: () => void;
@@ -523,6 +602,7 @@ function GroupSection({
             onDelete={onDelete}
             moveProps={moveProps}
             recurrenceProps={recurrenceProps}
+            detailProps={detailProps}
             reorder={reorder}
           />
         ))}
@@ -570,15 +650,17 @@ function SectionsView({
   onDelete,
   moveProps,
   recurrenceProps,
+  detailProps,
   reorder,
 }: {
   sections: DaySections;
   moveProps?: MoveProps;
   recurrenceProps?: RecurrenceProps;
+  detailProps?: TaskDetailProps;
   /** 넘기면 "할 일" 목록을 세로 드래그로 리오더할 수 있다 */
   reorder?: ReorderCommit;
 } & SectionHandlers) {
-  const extra = { moveProps, recurrenceProps };
+  const extra = { moveProps, recurrenceProps, detailProps };
   return (
     <>
       {sections.carried.length > 0 && (
@@ -606,6 +688,7 @@ function SectionsView({
               onCommit={reorder}
               moveProps={moveProps}
               recurrenceProps={recurrenceProps}
+              detailProps={detailProps}
               onToggle={onToggle}
               onRename={onRename}
               onDelete={onDelete}
@@ -659,6 +742,7 @@ function ReorderList({
   onCommit,
   moveProps,
   recurrenceProps,
+  detailProps,
   onToggle,
   onRename,
   onDelete,
@@ -667,6 +751,7 @@ function ReorderList({
   onCommit: ReorderCommit;
   moveProps?: MoveProps;
   recurrenceProps?: RecurrenceProps;
+  detailProps?: TaskDetailProps;
 } & SectionHandlers) {
   const [order, setOrder] = useState<Task[]>(items);
   const orderRef = useRef(order);
@@ -706,6 +791,7 @@ function ReorderList({
           onCommit={() => commit(task.id)}
           moveProps={moveProps}
           recurrenceProps={recurrenceProps}
+          detailProps={detailProps}
           onToggle={onToggle}
           onRename={onRename}
           onDelete={onDelete}
@@ -721,6 +807,7 @@ function ReorderRow({
   onCommit,
   moveProps,
   recurrenceProps,
+  detailProps,
   onToggle,
   onRename,
   onDelete,
@@ -729,6 +816,7 @@ function ReorderRow({
   onCommit: () => void;
   moveProps?: MoveProps;
   recurrenceProps?: RecurrenceProps;
+  detailProps?: TaskDetailProps;
 } & SectionHandlers) {
   const controls = useDragControls();
   return (
@@ -740,6 +828,7 @@ function ReorderRow({
         onDelete={onDelete}
         moveProps={moveProps}
         recurrenceProps={recurrenceProps}
+        detailProps={detailProps}
         dragHandle
         onDragHandlePointerDown={(e: ReactPointerEvent) => controls.start(e)}
       />

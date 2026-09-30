@@ -12,6 +12,8 @@ export type TaskRow = {
   due_date: string;
   completed_at: string | null;
   position: string;
+  memo: string | null;
+  parent_id: string | null;
   recurrence_id: string | null;
   created_at: string;
   updated_at: string;
@@ -64,6 +66,8 @@ export function toTask(r: TaskRow): Task {
     dueDate: r.due_date,
     completedAt: r.completed_at,
     position: r.position,
+    memo: r.memo ?? null, // 마이그레이션 전(컬럼 없음)에도 안전
+    parentId: r.parent_id ?? null, // 마이그레이션 전(컬럼 없음)에도 안전
     recurrenceId: r.recurrence_id ?? null, // 마이그레이션 전(컬럼 없음)에도 안전
     createdAt: r.created_at,
     updatedAt: r.updated_at,
