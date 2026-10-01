@@ -2,7 +2,6 @@ import type { ReactNode } from 'react';
 import {
   BarChart3,
   CalendarDays,
-  Check,
   Layers,
   NotebookPen,
   PanelLeftClose,
@@ -14,6 +13,7 @@ import {
   Trash2,
 } from 'lucide-react';
 import { ALL_TAB } from '@/db/types';
+import { BrandMark } from '@/components/BrandMark';
 import { useUiStore } from '@/store/uiStore';
 import { cn } from '@/lib/utils';
 import { useActiveTab } from './useActiveTab';
@@ -48,12 +48,16 @@ export function SpaceSidebar() {
       {/* 헤더: 브랜드 + 접기/펼치기 */}
       <div className={cn('flex items-center px-3 py-5', collapsed ? 'justify-center' : 'justify-between pl-5')}>
         {!collapsed && (
-          <div className="flex items-center gap-2.5">
+          <button
+            onClick={() => setView('day')}
+            aria-label="홈(하루 화면)으로"
+            className="flex items-center gap-2.5 rounded-lg transition hover:opacity-80"
+          >
             <span className="grid size-7 place-items-center rounded-lg bg-accent text-accentFg">
-              <Check className="size-4" strokeWidth={3} />
+              <BrandMark className="size-5" />
             </span>
             <span className="text-lg font-semibold tracking-tight">My Todos</span>
-          </div>
+          </button>
         )}
         <button
           onClick={toggleSidebar}
