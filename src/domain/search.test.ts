@@ -13,6 +13,7 @@ function makeTask(partial: Partial<Task>): Task {
     title: `task ${seq}`,
     dueDate: '2026-09-28',
     completedAt: null,
+    cancelledAt: null,
     position: 'a0',
     memo: null,
     parentId: null,

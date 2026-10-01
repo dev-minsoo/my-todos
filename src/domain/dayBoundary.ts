@@ -20,6 +20,11 @@ export function completionDay(completedAtISO: string): string {
   return toDateStr(parseISO(completedAtISO));
 }
 
+/** 취소 시각(ISO) → 취소한 '날' ('YYYY-MM-DD', 로컬). completionDay와 대칭. */
+export function cancellationDay(cancelledAtISO: string): string {
+  return toDateStr(parseISO(cancelledAtISO));
+}
+
 /** from → to 사이의 달력상 일수 (to - from). 인자는 'YYYY-MM-DD' */
 export function daysBetween(from: string, to: string): number {
   return differenceInCalendarDays(parseISO(to), parseISO(from));

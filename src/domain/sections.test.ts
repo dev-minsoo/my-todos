@@ -3,6 +3,7 @@ import type { Task } from '@/db/types';
 import {
   deriveSections,
   completionCount,
+  hasAnyItems,
   groupSectionsBySpace,
   groupSectionsByGroup,
   NO_GROUP_NAME,
@@ -19,6 +20,7 @@ function makeTask(partial: Partial<Task>): Task {
     title: `task ${seq}`,
     dueDate: '2026-09-28',
     completedAt: null,
+    cancelledAt: null,
     position: 'a0',
     memo: null,
     parentId: null,
@@ -67,6 +69,70 @@ describe('deriveSections (오늘 화면)', () => {
     const tasks = [makeTask({ dueDate: TODAY, deletedAt: '2026-09-28T00:00:00' })];
     const s = deriveSections(tasks, TODAY, TODAY);
     expect(s.open).toHaveLength(0);
+  });
+});
+
+describe('deriveSections 취소(두 번째 닫힘 상태, 완료와 대칭)', () => {
+  it('cancelled: 취소 시각의 날짜에 귀속된다 (dueDate 무관)', () => {
+    const tasks = [
+      makeTask({ dueDate: '2026-09-25', cancelledAt: '2026-09-28T11:00:00' }),
+    ];
+    const s = deriveSections(tasks, TODAY, TODAY);
+    expect(s.cancelled).toHaveLength(1);
+  });
+
+  it('취소한 항목은 open에서 빠진다 (오늘 dueDate여도)', () => {
+    const tasks = [makeTask({ dueDate: TODAY, cancelledAt: '2026-09-28T11:00:00' })];
+    const s = deriveSections(tasks, TODAY, TODAY);
+    expect(s.open).toHaveLength(0);
+    expect(s.cancelled).toHaveLength(1);
+  });
+
+  it('취소한 과거 미완료는 넘어오지 않는다 (carried 제외)', () => {
+    const tasks = [
+      makeTask({ dueDate: '2026-09-26', cancelledAt: '2026-09-27T11:00:00' }), // 취소된 과거 → 안 넘어옴
+      makeTask({ dueDate: '2026-09-26' }), // 일반 과거 미완료 → 넘어옴
+    ];
+    const s = deriveSections(tasks, TODAY, TODAY);
+    expect(s.carried).toHaveLength(1);
+    expect(s.carried[0].cancelledAt).toBeNull();
+  });
+
+  it('취소한 날이 지나면 그 섹션에서도 빠진다 (취소한 날에만 남음)', () => {
+    const tasks = [makeTask({ dueDate: '2026-09-26', cancelledAt: '2026-09-27T11:00:00' })];
+    // 오늘(9/28)에는 취소 섹션에 안 보인다 — 9/27에만 남는다
+    expect(deriveSections(tasks, TODAY, TODAY).cancelled).toHaveLength(0);
+    expect(deriveSections(tasks, '2026-09-27', TODAY).cancelled).toHaveLength(1);
+  });
+
+  it('취소 섹션은 취소 시각 내림차순 (최근 취소가 위)', () => {
+    const tasks = [
+      makeTask({ title: '먼저', cancelledAt: '2026-09-28T09:00:00' }),
+      makeTask({ title: '나중', cancelledAt: '2026-09-28T18:00:00' }),
+    ];
+    const s = deriveSections(tasks, TODAY, TODAY);
+    expect(s.cancelled.map((t) => t.title)).toEqual(['나중', '먼저']);
+  });
+
+  it('completionCount는 취소를 세지 않는다 (total·done 중립)', () => {
+    const tasks = [
+      makeTask({ dueDate: TODAY }), // open
+      makeTask({ dueDate: TODAY, completedAt: '2026-09-28T10:00:00' }), // completed
+      makeTask({ dueDate: TODAY, cancelledAt: '2026-09-28T11:00:00' }), // cancelled → 카운트 밖
+    ];
+    const s = deriveSections(tasks, TODAY, TODAY);
+    expect(completionCount(s)).toEqual({ total: 2, done: 1 });
+  });
+
+  it('hasAnyItems는 취소만 있어도 true (completionCount는 0이어도)', () => {
+    const tasks = [makeTask({ dueDate: TODAY, cancelledAt: '2026-09-28T11:00:00' })];
+    const s = deriveSections(tasks, TODAY, TODAY);
+    expect(completionCount(s)).toEqual({ total: 0, done: 0 });
+    expect(hasAnyItems(s)).toBe(true);
+  });
+
+  it('아무것도 없으면 hasAnyItems는 false', () => {
+    expect(hasAnyItems(deriveSections([], TODAY, TODAY))).toBe(false);
   });
 });
 
@@ -169,6 +235,14 @@ describe('groupSectionsBySpace (전체 탭)', () => {
     const tasks = [makeTask({ spaceId: 's1', dueDate: TODAY })];
     const groups = groupSectionsBySpace(tasks, SPACES, TODAY, TODAY);
     expect(groups.map((g) => g.spaceId)).toEqual(['s1']);
+  });
+
+  it('취소만 있는 공간도 남긴다 (취소 섹션을 보여주려고)', () => {
+    const tasks = [makeTask({ spaceId: 's2', dueDate: TODAY, cancelledAt: '2026-09-28T11:00:00' })];
+    const groups = groupSectionsBySpace(tasks, SPACES, TODAY, TODAY);
+    expect(groups.map((g) => g.spaceId)).toEqual(['s2']);
+    expect(groups[0].count).toEqual({ total: 0, done: 0 }); // 카운트엔 안 섞인다
+    expect(groups[0].sections.cancelled).toHaveLength(1);
   });
 
   it('회사 넘어옴이 개인 묶음에 섞이지 않는다', () => {

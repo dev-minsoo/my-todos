@@ -1,6 +1,6 @@
 import { format, parseISO } from 'date-fns';
 import { ko } from 'date-fns/locale';
-import { CalendarDays, CheckCircle2, Circle, Repeat } from 'lucide-react';
+import { Ban, CalendarDays, CheckCircle2, Circle, Repeat, RotateCcw } from 'lucide-react';
 import type { Group, Space, Task } from '@/db/types';
 import { daysBetween, todayStr } from '@/domain/dayBoundary';
 import { isVirtualOccurrence } from '@/domain/recurrence';
@@ -15,6 +15,10 @@ type Props = {
   spaces: Space[];
   groups: Group[];
   subtasksByParent: Map<string, Task[]>;
+  /** 취소(두 번째 '닫힘') — 완료도 삭제도 아닌 흐지부지 닫기. */
+  onCancel: (task: Task) => void;
+  /** 취소 해제(복구) — 다시 "할 일"로. */
+  onUncancel: (task: Task) => void;
   onClose: () => void;
 };
 
@@ -25,13 +29,29 @@ const fmtDay = (s: string) => format(parseISO(s), 'M월 d일 (EEE)', { locale: k
  * 편집(제목·메모·서브태스크)은 항목 행(인라인·펼침 패널)에서 하고, 여기선 한눈에 보기만 한다.
  * 조작 기본은 여전히 인라인이며, 이 모달은 정보 열람 용도로만 연다.
  */
-export function TaskDetailModal({ taskId, tasks, spaces, groups, subtasksByParent, onClose }: Props) {
+export function TaskDetailModal({
+  taskId,
+  tasks,
+  spaces,
+  groups,
+  subtasksByParent,
+  onCancel,
+  onUncancel,
+  onClose,
+}: Props) {
   const task = taskId ? tasks.find((t) => t.id === taskId) ?? null : null;
   // 열려던 항목이 사라졌으면(삭제·동기화) 조용히 닫힌다.
   return (
     <Modal open={task != null} onClose={onClose} title={task?.title ?? ''}>
       {task && (
-        <Body task={task} spaces={spaces} groups={groups} subtasksByParent={subtasksByParent} />
+        <Body
+          task={task}
+          spaces={spaces}
+          groups={groups}
+          subtasksByParent={subtasksByParent}
+          onCancel={onCancel}
+          onUncancel={onUncancel}
+        />
       )}
     </Modal>
   );
@@ -42,36 +62,49 @@ function Body({
   spaces,
   groups,
   subtasksByParent,
+  onCancel,
+  onUncancel,
 }: {
   task: Task;
   spaces: Space[];
   groups: Group[];
   subtasksByParent: Map<string, Task[]>;
+  onCancel: (task: Task) => void;
+  onUncancel: (task: Task) => void;
 }) {
   const done = task.completedAt != null;
+  const cancelled = task.cancelledAt != null;
   const isVirtual = isVirtualOccurrence(task);
   const space = spaces.find((s) => s.id === task.spaceId) ?? null;
   const group = task.groupId ? groups.find((g) => g.id === task.groupId) ?? null : null;
   const subtasks = subtasksByParent.get(task.id) ?? [];
   const subDone = subtasks.filter((s) => s.completedAt != null).length;
-  // 넘어옴(며칠 지남)은 행 배지와 같은 기준: 오늘까지 밀린 달력 일수(미완료일 때만).
-  const overdue = done ? 0 : Math.max(0, daysBetween(task.dueDate, todayStr()));
+  // 넘어옴(며칠 지남)은 행 배지와 같은 기준: 오늘까지 밀린 달력 일수(미완료·미취소일 때만).
+  const overdue = done || cancelled ? 0 : Math.max(0, daysBetween(task.dueDate, todayStr()));
 
   return (
     <div className="space-y-4 text-sm">
-      {/* 상태 */}
+      {/* 상태: 완료 / 취소됨 / 미완료 */}
       <div className="flex items-center gap-2">
-        {done ? (
+        {cancelled ? (
+          <Ban className="size-4 shrink-0 text-muted" />
+        ) : done ? (
           <CheckCircle2 className="size-4 shrink-0 text-accent" />
         ) : (
           <Circle className="size-4 shrink-0 text-muted" />
         )}
-        <span className={cn('font-medium', done && 'text-accent')}>{done ? '완료' : '미완료'}</span>
-        {done && task.completedAt && (
+        <span className={cn('font-medium', done && !cancelled && 'text-accent', cancelled && 'text-muted line-through')}>
+          {cancelled ? '취소됨' : done ? '완료' : '미완료'}
+        </span>
+        {cancelled && task.cancelledAt ? (
+          <span className="text-xs text-muted">
+            · {format(parseISO(task.cancelledAt), 'M월 d일 HH:mm', { locale: ko })}
+          </span>
+        ) : done && task.completedAt ? (
           <span className="text-xs text-muted">
             · {format(parseISO(task.completedAt), 'M월 d일 HH:mm', { locale: ko })}
           </span>
-        )}
+        ) : null}
       </div>
 
       {/* 날짜 + 넘어옴 */}
@@ -150,6 +183,31 @@ function Body({
             )}
           </section>
         </>
+      )}
+
+      {/* 액션: 취소(미완료만) / 복구(취소됨). 완료한 항목엔 안 보인다(이미 긍정적으로 닫힘). */}
+      {(cancelled || !done) && (
+        <div className="flex border-t border-border pt-3">
+          {cancelled ? (
+            <button
+              type="button"
+              onClick={() => onUncancel(task)}
+              className="inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm text-muted transition hover:bg-surface2 hover:text-text"
+            >
+              <RotateCcw className="size-4" />
+              복구
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={() => onCancel(task)}
+              className="inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm text-muted transition hover:bg-amber-500/10 hover:text-amber-500"
+            >
+              <Ban className="size-4" />
+              취소
+            </button>
+          )}
+        </div>
       )}
 
       {/* 만든 날 */}

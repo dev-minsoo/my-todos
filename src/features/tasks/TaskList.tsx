@@ -10,6 +10,7 @@ import { AnimatePresence, motion, Reorder, useDragControls } from 'framer-motion
 import {
   ArrowDown,
   ArrowUp,
+  Ban,
   CalendarDays,
   CheckCircle2,
   ChevronDown,
@@ -21,7 +22,7 @@ import {
   Trash2,
   type LucideIcon,
 } from 'lucide-react';
-import { ALL_TAB, type Group, type TabId } from '@/db/types';
+import { ALL_TAB, type Group } from '@/db/types';
 import { useUiStore } from '@/store/uiStore';
 import { todayStr } from '@/domain/dayBoundary';
 import { positionBetween } from '@/domain/order';
@@ -30,6 +31,7 @@ import {
   deriveSections,
   groupSectionsBySpace,
   groupSectionsByGroup,
+  hasAnyItems,
 } from '@/domain/sections';
 import type { DaySections, GroupBucket, SpaceGroup } from '@/domain/sections';
 import { isVirtualOccurrence, virtualOccurrences } from '@/domain/recurrence';
@@ -44,7 +46,6 @@ import type { GroupOption } from './GroupMovePopover';
 import type { TaskMoveProps } from './MoveTaskPopover';
 import { TaskItem, type RecurrenceProps, type TaskDetailProps } from './TaskItem';
 import { TaskDetailModal } from './TaskDetailModal';
-import { useDayShortcuts } from './useDayShortcuts';
 import { useTasks } from './useTasks';
 
 const byPosition = (a: Group, b: Group) =>
@@ -52,7 +53,6 @@ const byPosition = (a: Group, b: Group) =>
 
 export function TaskList() {
   const viewedDate = useUiStore((s) => s.viewedDate);
-  const setCurrentTab = useUiStore((s) => s.setCurrentTab);
   // 상세 정보 모달: 항목 제목 클릭으로 열린다(읽기 전용). store 기반이라 프롭 스레딩 없이 한 곳에서 렌더.
   const detailTaskId = useUiStore((s) => s.detailTaskId);
   const setDetailTaskId = useUiStore((s) => s.setDetailTaskId);
@@ -70,6 +70,8 @@ export function TaskList() {
     toggleTask,
     renameTask,
     deleteTask,
+    cancelTask,
+    uncancelTask,
     addSubtask,
     updateMemo,
     moveTaskToGroup,
@@ -110,15 +112,6 @@ export function TaskList() {
     onEditMemo: (task, memo) => updateMemo(task.id, memo),
   };
 
-  // 1..n 탭 전환 순서: 공간이 2개 이상이면 [전체]를 앞에 둔다(SpaceTabs/사이드바 노출 규칙과 동일).
-  const tabIds = useMemo<TabId[]>(
-    () => [...(spaces.length >= 2 ? [ALL_TAB] : []), ...spaces.map((s) => s.id)],
-    [spaces]
-  );
-
-  // 하루 화면 키보드 단축키(n·j/k·x·e·1..n·Esc). ←/→는 DayHeader가 담당.
-  useDayShortcuts({ dayTasks, toggleTask, tabIds, setCurrentTab });
-
   // 이름 수정 라우팅: 반복 출신이면 시리즈 제목을 고치고(습관은 "매일 같은 것"),
   // 이미 실체화된 실제 행이면 그 행 제목도 함께 바꾼다. 일반 항목은 그대로.
   const handleRename = (task: Task, title: string) => {
@@ -136,10 +129,13 @@ export function TaskList() {
     ? dayTasks.filter((t) => spaceIds.has(t.spaceId))
     : dayTasks.filter((t) => t.spaceId === activeTab);
   const sections = deriveSections(scoped, viewedDate, today);
-  const count = completionCount(sections); // 상단 진행률: 전체 합산(또는 단일 공간)
-  const isEmpty = count.total === 0;
+  const count = completionCount(sections); // 상단 진행률: 전체 합산(또는 단일 공간). 취소는 미포함.
+  // "보여 줄 게 있나"(취소 포함) vs "진행률에 셀 게 있나"(취소 제외)를 분리한다.
+  // 취소만 있는 날·공간·그룹도 "취소" 섹션은 보여 주되, 진행률 바는 0/0으로 뜨지 않게 한다.
+  const isEmpty = !hasAnyItems(sections);
+  const noCountable = count.total === 0;
   const pct = count.total > 0 ? Math.round((count.done / count.total) * 100) : 0;
-  const allDone = !isEmpty && count.done === count.total; // 오늘 다 끝냈을 때 축하 배너 조건
+  const allDone = count.total > 0 && count.done === count.total; // 오늘 다 끝냈을 때 축하 배너 조건
   // 빈 오늘에도 헤더를 유지해 첫 항목 추가 시 레이아웃이 튀지 않게 한다(빈 과거 날은 EmptyState만).
   const showHeader = !isEmpty || isToday;
 
@@ -164,7 +160,13 @@ export function TaskList() {
   const showCollapseControls =
     collapseTargets.spaceIds.length + collapseTargets.groupIds.length > 0;
 
-  const handlers = { onToggle: toggleTask, onRename: handleRename, onDelete: deleteTask };
+  const handlers = {
+    onToggle: toggleTask,
+    onRename: handleRename,
+    onDelete: deleteTask,
+    onCancel: cancelTask,
+    onUncancel: uncancelTask,
+  };
 
   // 세로 리오더 커밋: 드롭 위치의 두 이웃 position 사이 키를 계산해 저장한다(due_date 불변).
   // 단일 공간 뷰(그리고 각 그룹 버킷)의 "할 일"에서만 쓴다. [전체] 탭·완료/넘어옴은 제외.
@@ -190,7 +192,7 @@ export function TaskList() {
     <div className="flex min-h-0 flex-1 flex-col">
       {showHeader && (
         <div className="flex items-center justify-between gap-4 border-b border-border px-5 py-3.5">
-          {isEmpty ? (
+          {noCountable ? (
             <>
               <span className="text-sm text-muted">할 일</span>
               <div className="h-1.5 w-28 overflow-hidden rounded-full bg-surface2" aria-hidden />
@@ -264,7 +266,7 @@ export function TaskList() {
                       spGroups.map((g) => ({ id: g.id, name: g.name })),
                       viewedDate,
                       today
-                    ).filter((b) => b.count.total > 0)
+                    ).filter((b) => hasAnyItems(b.sections))
                   : null;
               return (
                 <SpaceSection
@@ -294,8 +296,9 @@ export function TaskList() {
                 : null;
               const idx = group ? spaceGroups.findIndex((g) => g.id === group.id) : -1;
               // 실제 그룹: 오늘엔 모두, 지난 날엔 항목이 있는 것만. 그룹 없음: 항목 있을 때만.
-              const visible =
-                bucket.groupId === null ? bucket.count.total > 0 : isToday || bucket.count.total > 0;
+              // (취소만 있는 그룹도 "항목 있음"으로 쳐서 취소 섹션을 보여 준다.)
+              const hasItems = hasAnyItems(bucket.sections);
+              const visible = bucket.groupId === null ? hasItems : isToday || hasItems;
               if (!visible) return null;
               return (
                 <GroupSection
@@ -341,6 +344,8 @@ export function TaskList() {
         spaces={spaces}
         groups={groups}
         subtasksByParent={subtasksByParent}
+        onCancel={cancelTask}
+        onUncancel={uncancelTask}
         onClose={() => setDetailTaskId(null)}
       />
     </div>
@@ -407,6 +412,8 @@ function SpaceSection({
   onToggle,
   onRename,
   onDelete,
+  onCancel,
+  onUncancel,
 }: {
   space: SpaceGroup;
   /** 그룹이 있는 공간의 그룹별 버킷(빈 그룹 제외). 그룹이 없으면 null → 평면 렌더. */
@@ -459,6 +466,8 @@ function SpaceSection({
                 onToggle={onToggle}
                 onRename={onRename}
                 onDelete={onDelete}
+                onCancel={onCancel}
+                onUncancel={onUncancel}
               />
             ))}
           </div>
@@ -471,6 +480,8 @@ function SpaceSection({
             onToggle={onToggle}
             onRename={onRename}
             onDelete={onDelete}
+            onCancel={onCancel}
+            onUncancel={onUncancel}
           />
         ))}
     </section>
@@ -481,6 +492,8 @@ type SectionHandlers = {
   onToggle: (task: Task) => void;
   onRename: (task: Task, title: string) => void;
   onDelete: (task: Task) => void;
+  onCancel: (task: Task) => void;
+  onUncancel: (task: Task) => void;
 };
 
 /** 한 그룹(접이식) 섹션: 헤더(접기·이름·카운트·관리) + 본문 */
@@ -494,6 +507,8 @@ function GroupSection({
   onToggle,
   onRename,
   onDelete,
+  onCancel,
+  onUncancel,
   onRenameGroup,
   onDeleteGroup,
   onMoveUp,
@@ -592,19 +607,21 @@ function GroupSection({
       </div>
 
       {!collapsed &&
-        (bucket.count.total === 0 ? (
-          <p className="px-3 py-2 text-xs text-muted">아직 할 일이 없어요</p>
-        ) : (
+        (hasAnyItems(bucket.sections) ? (
           <SectionsView
             sections={bucket.sections}
             onToggle={onToggle}
             onRename={onRename}
             onDelete={onDelete}
+            onCancel={onCancel}
+            onUncancel={onUncancel}
             moveProps={moveProps}
             recurrenceProps={recurrenceProps}
             detailProps={detailProps}
             reorder={reorder}
           />
+        ) : (
+          <p className="px-3 py-2 text-xs text-muted">아직 할 일이 없어요</p>
         ))}
     </section>
   );
@@ -648,6 +665,8 @@ function SectionsView({
   onToggle,
   onRename,
   onDelete,
+  onCancel,
+  onUncancel,
   moveProps,
   recurrenceProps,
   detailProps,
@@ -660,22 +679,15 @@ function SectionsView({
   /** 넘기면 "할 일" 목록을 세로 드래그로 리오더할 수 있다 */
   reorder?: ReorderCommit;
 } & SectionHandlers) {
-  const extra = { moveProps, recurrenceProps, detailProps };
+  // 항목에 공통으로 흘려보내는 핸들러·값 묶음(완료·취소 포함).
+  const extra = { onToggle, onRename, onDelete, onCancel, onUncancel, moveProps, recurrenceProps, detailProps };
   return (
     <>
       {sections.carried.length > 0 && (
         <Section title="남은 일" tone="carried" icon={CornerDownRight} count={sections.carried.length}>
           <AnimatePresence initial={false}>
             {sections.carried.map((t) => (
-              <TaskItem
-                key={t.id}
-                task={t}
-                overdueDays={t.overdueDays}
-                onToggle={onToggle}
-                onRename={onRename}
-                onDelete={onDelete}
-                {...extra}
-              />
+              <TaskItem key={t.id} task={t} overdueDays={t.overdueDays} {...extra} />
             ))}
           </AnimatePresence>
         </Section>
@@ -683,29 +695,13 @@ function SectionsView({
       {sections.open.length > 0 &&
         (reorder ? (
           <Section title="할 일">
-            <ReorderList
-              items={sections.open}
-              onCommit={reorder}
-              moveProps={moveProps}
-              recurrenceProps={recurrenceProps}
-              detailProps={detailProps}
-              onToggle={onToggle}
-              onRename={onRename}
-              onDelete={onDelete}
-            />
+            <ReorderList items={sections.open} onCommit={reorder} {...extra} />
           </Section>
         ) : (
           <Section title="할 일">
             <AnimatePresence initial={false}>
               {sections.open.map((t) => (
-                <TaskItem
-                  key={t.id}
-                  task={t}
-                  onToggle={onToggle}
-                  onRename={onRename}
-                  onDelete={onDelete}
-                  {...extra}
-                />
+                <TaskItem key={t.id} task={t} {...extra} />
               ))}
             </AnimatePresence>
           </Section>
@@ -715,14 +711,17 @@ function SectionsView({
         <Section title="완료" tone="done" count={sections.completed.length}>
           <AnimatePresence initial={false}>
             {sections.completed.map((t) => (
-              <TaskItem
-                key={t.id}
-                task={t}
-                onToggle={onToggle}
-                onRename={onRename}
-                onDelete={onDelete}
-                {...extra}
-              />
+              <TaskItem key={t.id} task={t} {...extra} />
+            ))}
+          </AnimatePresence>
+        </Section>
+      )}
+      {/* 취소한 항목(두 번째 '닫힘'): 완료와 별도 섹션, 흐리게·취소선. 완료 카운트엔 안 섞인다. */}
+      {sections.cancelled.length > 0 && (
+        <Section title="취소" tone="cancelled" icon={Ban} count={sections.cancelled.length}>
+          <AnimatePresence initial={false}>
+            {sections.cancelled.map((t) => (
+              <TaskItem key={t.id} task={t} {...extra} />
             ))}
           </AnimatePresence>
         </Section>
@@ -746,6 +745,8 @@ function ReorderList({
   onToggle,
   onRename,
   onDelete,
+  onCancel,
+  onUncancel,
 }: {
   items: Task[];
   onCommit: ReorderCommit;
@@ -795,6 +796,8 @@ function ReorderList({
           onToggle={onToggle}
           onRename={onRename}
           onDelete={onDelete}
+          onCancel={onCancel}
+          onUncancel={onUncancel}
         />
       ))}
     </Reorder.Group>
@@ -811,6 +814,8 @@ function ReorderRow({
   onToggle,
   onRename,
   onDelete,
+  onCancel,
+  onUncancel,
 }: {
   task: Task;
   onCommit: () => void;
@@ -826,6 +831,8 @@ function ReorderRow({
         onToggle={onToggle}
         onRename={onRename}
         onDelete={onDelete}
+        onCancel={onCancel}
+        onUncancel={onUncancel}
         moveProps={moveProps}
         recurrenceProps={recurrenceProps}
         detailProps={detailProps}
@@ -846,8 +853,8 @@ function Section({
   title: string;
   /** 제목 옆 개수 (0이면 숨김) */
   count?: number;
-  /** carried=넘어옴(따뜻한 강조), done=완료(살짝 후퇴) */
-  tone?: 'carried' | 'done';
+  /** carried=넘어옴(따뜻한 강조), done=완료(살짝 후퇴), cancelled=취소(흐림) */
+  tone?: 'carried' | 'done' | 'cancelled';
   icon?: LucideIcon;
   children: ReactNode;
 }) {

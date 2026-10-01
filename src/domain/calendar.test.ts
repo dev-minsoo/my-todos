@@ -21,6 +21,7 @@ function mkTask(p: Partial<Task>): Task {
     title: 't',
     dueDate: '2026-09-10',
     completedAt: null,
+    cancelledAt: null,
     position: '1',
     memo: null,
     parentId: null,
@@ -135,6 +136,15 @@ describe('dayStat', () => {
     const tasks = [mkTask({ dueDate: '2026-09-10', deletedAt: '2026-09-11T00:00:00' })];
     expect(dayStat(tasks, '2026-09-10', today).total).toBe(0);
   });
+
+  it('취소한 항목은 완료율 분모에 안 들어간다 (하루 화면과 동일)', () => {
+    const tasks = [
+      mkTask({ dueDate: '2026-09-10', completedAt: '2026-09-10T12:00:00' }), // 완료
+      mkTask({ dueDate: '2026-09-10', cancelledAt: '2026-09-10T13:00:00' }), // 취소 → 카운트 밖
+    ];
+    const s = dayStat(tasks, '2026-09-10', today);
+    expect(s).toEqual({ total: 1, done: 1, rate: 1 });
+  });
 });
 
 describe('completedSpaceIds', () => {
@@ -153,6 +163,11 @@ describe('completedSpaceIds', () => {
 
   it('완료가 없으면 빈 배열', () => {
     expect(completedSpaceIds([mkTask({ completedAt: null })], '2026-09-10')).toEqual([]);
+  });
+
+  it('취소는 완료 공간 점에 넣지 않는다 (완료가 아님)', () => {
+    const tasks = [mkTask({ spaceId: 'z', cancelledAt: '2026-09-10T13:00:00' })];
+    expect(completedSpaceIds(tasks, '2026-09-10')).toEqual([]);
   });
 });
 

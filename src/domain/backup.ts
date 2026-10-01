@@ -100,6 +100,7 @@ export type TaskInsert = {
   title: string;
   due_date: string;
   completed_at: string | null;
+  cancelled_at: string | null;
   position: string;
   memo: string | null;
   parent_id: string | null;
@@ -187,6 +188,7 @@ export function remapForImport(
       title: t.title,
       due_date: t.dueDate,
       completed_at: t.completedAt,
+      cancelled_at: t.cancelledAt,
       position: t.position,
       memo: t.memo,
       // 부모가 드롭됐거나 참조가 깨졌으면 null(최상위로 승격) — 고아 방지.
@@ -291,6 +293,7 @@ function normalizeTask(raw: unknown): Task {
     title: reqStr(r, 'title'),
     dueDate: reqStr(r, 'dueDate'),
     completedAt: nullableStr(r, 'completedAt'),
+    cancelledAt: nullableStr(r, 'cancelledAt'), // 옛 백업(필드 없음)은 null 폴백
     position: optStr(r, 'position'),
     memo: nullableStr(r, 'memo'),
     parentId: nullableStr(r, 'parentId'),

@@ -2,6 +2,7 @@ import { useEffect, useState, type PointerEvent as ReactPointerEvent } from 'rea
 import { motion, useMotionValue, useTransform, type PanInfo } from 'framer-motion';
 import {
   ArrowRightLeft,
+  Ban,
   CheckCircle2,
   ChevronDown,
   Circle,
@@ -9,6 +10,7 @@ import {
   Pencil,
   Plus,
   Repeat,
+  RotateCcw,
   Trash2,
   X,
 } from 'lucide-react';
@@ -42,6 +44,10 @@ type Props = {
   onToggle?: (task: Task) => void;
   onRename?: (task: Task, title: string) => void;
   onDelete?: (task: Task) => void;
+  /** 취소(두 번째 '닫힘'): 흐지부지된 할 일을 닫는다. 넘기면 우측에 취소 버튼이 뜬다. */
+  onCancel?: (task: Task) => void;
+  /** 취소 해제(복구): 취소된 항목을 다시 "할 일"로. 취소 섹션의 복구 버튼용. */
+  onUncancel?: (task: Task) => void;
   /** 넘기면 통합 "이동"(날짜·공간·그룹) 버튼이 뜬다 */
   moveProps?: TaskMoveProps;
   /** 반복 출신 항목의 규칙 아이콘·관리 팝오버용 */
@@ -64,6 +70,8 @@ export function TaskItem({
   onToggle,
   onRename,
   onDelete,
+  onCancel,
+  onUncancel,
   moveProps,
   recurrenceProps,
   detailProps,
@@ -71,6 +79,7 @@ export function TaskItem({
   onDragHandlePointerDown,
 }: Props) {
   const done = task.completedAt != null;
+  const cancelled = task.cancelledAt != null;
   // 가상 발생분은 아직 실체화 전이라 순서변경·이동·메모/서브태스크를 걸지 않는다.
   const isVirtual = isVirtualOccurrence(task);
   const canMove = !isVirtual && moveProps != null;
@@ -80,8 +89,7 @@ export function TaskItem({
       ? recurrenceProps.recurrences.find((r) => r.id === task.recurrenceId) ?? null
       : null;
 
-  // 항목 커서(j/k)와 편집(e/제목 클릭)은 세션 UI 상태로 관리 — 키보드와 클릭이 같은 진실을 공유.
-  const selected = useUiStore((s) => s.selectedTaskId === task.id);
+  // 편집은 세션 UI 상태로 관리 — 우측 연필 버튼으로 진입.
   const editing = useUiStore((s) => s.editingTaskId === task.id);
   const setEditingTaskId = useUiStore((s) => s.setEditingTaskId);
   // 제목 클릭은 상세 정보 모달(읽기 전용)을 연다. 수정은 우측 연필 버튼/e키로.
@@ -152,7 +160,7 @@ export function TaskItem({
 
       {/* 앞 레이어: 실제 항목. 불투명 배경으로 뒤 힌트를 평소엔 가린다. */}
       <motion.div
-        drag={editing ? false : 'x'}
+        drag={editing || cancelled ? false : 'x'}
         dragConstraints={{ left: 0, right: 0 }}
         dragElastic={0.35}
         dragMomentum={false}
@@ -160,7 +168,7 @@ export function TaskItem({
         onDragEnd={handleDragEnd}
         className={cn(
           'group relative flex items-center gap-3 rounded-xl bg-surface px-3 py-2.5 transition hover:bg-surface2',
-          selected && 'ring-2 ring-inset ring-accent'
+          cancelled && 'opacity-60'
         )}
       >
         {dragHandle && !isVirtual && (
@@ -181,17 +189,31 @@ export function TaskItem({
           </button>
         )}
 
-        <motion.button
-          onClick={() => onToggle?.(task)}
-          whileTap={{ scale: 0.8 }}
-          aria-label={done ? '완료 해제' : '완료'}
-          className={cn(
-            'shrink-0 transition',
-            done ? 'text-accent' : 'text-muted hover:text-accent'
-          )}
-        >
-          {done ? <CheckCircle2 className="size-5" /> : <Circle className="size-5" />}
-        </motion.button>
+        {cancelled ? (
+          // 취소된 항목: 완료 토글 대신 복구(취소 해제) 어포던스. 완료 섹션에서
+          // 체크를 다시 눌러 완료 해제하는 것과 대칭 — 상태 글리프가 곧 되돌리기 버튼.
+          <motion.button
+            onClick={() => onUncancel?.(task)}
+            whileTap={{ scale: 0.85 }}
+            aria-label="취소 해제"
+            title="취소 해제(다시 할 일로)"
+            className="shrink-0 text-muted transition hover:text-accent"
+          >
+            <RotateCcw className="size-5" />
+          </motion.button>
+        ) : (
+          <motion.button
+            onClick={() => onToggle?.(task)}
+            whileTap={{ scale: 0.8 }}
+            aria-label={done ? '완료 해제' : '완료'}
+            className={cn(
+              'shrink-0 transition',
+              done ? 'text-accent' : 'text-muted hover:text-accent'
+            )}
+          >
+            {done ? <CheckCircle2 className="size-5" /> : <Circle className="size-5" />}
+          </motion.button>
+        )}
 
         {editing ? (
           <input
@@ -215,7 +237,7 @@ export function TaskItem({
             aria-label="상세 보기"
             className={cn(
               'min-w-0 flex-1 truncate text-left text-sm',
-              done && 'text-muted line-through'
+              (done || cancelled) && 'text-muted line-through'
             )}
           >
             {task.title}
@@ -288,6 +310,19 @@ export function TaskItem({
             className="shrink-0 rounded-md p-1 text-muted opacity-0 transition hover:text-accent focus-visible:opacity-100 group-hover:opacity-100 max-md:opacity-100"
           >
             <Pencil className="size-4" />
+          </button>
+        )}
+
+        {/* 취소: 완료도 삭제도 아닌 '흐지부지' 닫기. 미완료·미취소 항목에만 노출.
+            완료한 항목은 이미 긍정적으로 닫혔으므로 취소 버튼을 숨긴다. */}
+        {!cancelled && !done && onCancel && (
+          <button
+            onClick={() => onCancel(task)}
+            aria-label="취소"
+            title="취소(흐지부지된 할 일 닫기)"
+            className="shrink-0 rounded-md p-1 text-muted opacity-0 transition hover:text-amber-500 focus-visible:opacity-100 group-hover:opacity-100 max-md:opacity-100"
+          >
+            <Ban className="size-4" />
           </button>
         )}
 

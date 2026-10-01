@@ -1,5 +1,12 @@
 import { describe, it, expect } from 'vitest';
-import { toDateStr, todayStr, completionDay, daysBetween, addDaysStr } from './dayBoundary';
+import {
+  toDateStr,
+  todayStr,
+  completionDay,
+  cancellationDay,
+  daysBetween,
+  addDaysStr,
+} from './dayBoundary';
 
 describe('dayBoundary', () => {
   it('toDateStr: Date를 로컬 YYYY-MM-DD로', () => {
@@ -14,6 +21,11 @@ describe('dayBoundary', () => {
   it('completionDay: 시각을 그 날짜로 (오프셋 없는 ISO는 로컬 해석)', () => {
     expect(completionDay('2026-09-28T15:30:00')).toBe('2026-09-28');
     expect(completionDay('2026-09-28T00:01:00')).toBe('2026-09-28');
+  });
+
+  it('cancellationDay: 취소 시각을 그 날짜로 (completionDay와 대칭)', () => {
+    expect(cancellationDay('2026-09-28T15:30:00')).toBe('2026-09-28');
+    expect(cancellationDay('2026-09-28T00:01:00')).toBe('2026-09-28');
   });
 
   it('daysBetween: to - from 달력 일수', () => {

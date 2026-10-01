@@ -11,6 +11,7 @@ export type TaskRow = {
   title: string;
   due_date: string;
   completed_at: string | null;
+  cancelled_at: string | null;
   position: string;
   memo: string | null;
   parent_id: string | null;
@@ -65,6 +66,7 @@ export function toTask(r: TaskRow): Task {
     title: r.title,
     dueDate: r.due_date,
     completedAt: r.completed_at,
+    cancelledAt: r.cancelled_at ?? null, // 마이그레이션 전(컬럼 없음)에도 안전
     position: r.position,
     memo: r.memo ?? null, // 마이그레이션 전(컬럼 없음)에도 안전
     parentId: r.parent_id ?? null, // 마이그레이션 전(컬럼 없음)에도 안전

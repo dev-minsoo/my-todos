@@ -65,6 +65,7 @@ function task(over: Partial<Task> = {}): Task {
     title: '할 일',
     dueDate: '2026-09-30',
     completedAt: null,
+    cancelledAt: null,
     position: '0000000001',
     memo: null,
     parentId: null,
@@ -153,6 +154,20 @@ describe('parseBackup', () => {
     delete (raw.data.tasks[0] as { title?: string }).title;
     expect(() => parseBackup(raw)).toThrow('백업 파일 형식이 올바르지 않아요.');
   });
+
+  it('cancelled_at을 파싱해 보존한다', () => {
+    const raw = validFile();
+    (raw.data.tasks[0] as Record<string, unknown>).cancelledAt = '2026-09-28T11:00:00.000Z';
+    const data = parseBackup(raw);
+    expect(data.tasks[0].cancelledAt).toBe('2026-09-28T11:00:00.000Z');
+  });
+
+  it('cancelledAt 필드가 없는 옛 백업은 null로 폴백한다', () => {
+    const raw = validFile();
+    delete (raw.data.tasks[0] as { cancelledAt?: string }).cancelledAt;
+    const data = parseBackup(raw);
+    expect(data.tasks[0].cancelledAt).toBeNull();
+  });
 });
 
 describe('remapForImport', () => {
@@ -235,6 +250,17 @@ describe('remapForImport', () => {
     const t1 = out.tasks.find((t) => t.title === '할 일')!;
     expect(t1.completed_at).toBe('2026-09-10T00:00:00.000Z');
     expect(t1.due_date).toBe('2026-09-30');
+  });
+
+  it('cancelled_at을 보존한다 (취소 상태 라운드트립)', () => {
+    const data: BackupData = {
+      spaces: [space({ id: 's1' })],
+      groups: [],
+      recurrences: [],
+      tasks: [task({ id: 't1', spaceId: 's1', cancelledAt: '2026-09-28T11:00:00.000Z' })],
+    };
+    const out = remapForImport(data, counter(), userId);
+    expect(out.tasks[0].cancelled_at).toBe('2026-09-28T11:00:00.000Z');
   });
 
   it('서브태스크의 parent_id를 부모의 새 id로 다시 잇고 memo를 보존한다', () => {

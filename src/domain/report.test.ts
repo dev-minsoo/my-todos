@@ -61,6 +61,7 @@ function task(over: Partial<Task> = {}): Task {
     title: '할 일',
     dueDate: '2026-09-15',
     completedAt: null,
+    cancelledAt: null,
     position: '1',
     memo: null,
     parentId: null,
@@ -145,6 +146,18 @@ describe('buildReport summary', () => {
     expect(r.summary.dueTotal).toBe(0);
     expect(r.summary.adherenceRate).toBe(0);
     expect(r.summary.avgLateDays).toBe(0);
+  });
+
+  it('취소한 할 일은 마감분(분모)·미수행에서 빠진다 (미이행이 아님)', () => {
+    // 기간 내 마감 일반 할 일 2개: 하나는 미완료, 하나는 취소.
+    const tasks = [
+      task({ id: 'm1', dueDate: '2026-09-10', completedAt: null }), // 미수행
+      task({ id: 'm2', dueDate: '2026-09-11', completedAt: null, cancelledAt: '2026-09-12T09:00:00.000Z' }), // 취소 → 분모 밖
+    ];
+    const s = run({ tasks }).summary;
+    expect(s.dueTotal).toBe(1); // m1만
+    expect(s.dueDone).toBe(0);
+    expect(s.missed).toBe(1); // 취소는 미수행에 안 들어간다
   });
 });
 

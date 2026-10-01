@@ -154,6 +154,7 @@ export function useTasks() {
         title,
         dueDate,
         completedAt: null,
+        cancelledAt: null,
         position,
         memo: null,
         parentId: null,
@@ -200,6 +201,7 @@ export function useTasks() {
         title,
         dueDate: parent.dueDate,
         completedAt: null,
+        cancelledAt: null,
         position,
         memo: null,
         parentId: parent.id,
@@ -359,6 +361,51 @@ export function useTasks() {
     onSettled: invalidate,
   });
 
+  // 취소(두 번째 '닫힘' 상태) — cancelled_at만 세팅한다. 완료와 상호배타이므로
+  // 혹시 완료였던 행을 취소하면 completed_at은 null로 되돌린다(둘이 공존하지 않게).
+  const cancel = useMutation<void, unknown, Task, Ctx>({
+    mutationFn: async (task) => {
+      const { error } = await supabase
+        .from('tasks')
+        .update({ cancelled_at: new Date().toISOString(), completed_at: null })
+        .eq('id', task.id);
+      if (error) throw error;
+    },
+    onMutate: async (task) => {
+      const ctx = await snapshot();
+      const now = new Date().toISOString();
+      patch((p) =>
+        p.map((t) => (t.id === task.id ? { ...t, cancelledAt: now, completedAt: null } : t))
+      );
+      return ctx;
+    },
+    onError: (e, _v, ctx) => rollback(e, ctx, '취소하지 못했습니다.'),
+    onSuccess: (_d, task) => {
+      toast('취소됨', {
+        action: { label: '실행 취소', onClick: () => uncancel.mutate(task) },
+      });
+    },
+    onSettled: invalidate,
+  });
+
+  // 취소 해제(복구) — cancelled_at을 null로 돌려 다시 "할 일"로. 조용히 실행(Undo 경로).
+  const uncancel = useMutation<void, unknown, Task, Ctx>({
+    mutationFn: async (task) => {
+      const { error } = await supabase
+        .from('tasks')
+        .update({ cancelled_at: null })
+        .eq('id', task.id);
+      if (error) throw error;
+    },
+    onMutate: async (task) => {
+      const ctx = await snapshot();
+      patch((p) => p.map((t) => (t.id === task.id ? { ...t, cancelledAt: null } : t)));
+      return ctx;
+    },
+    onError: (e, _v, ctx) => rollback(e, ctx, '복구하지 못했습니다.'),
+    onSettled: invalidate,
+  });
+
   const rename = useMutation<void, unknown, { id: string; title: string }, Ctx>({
     mutationFn: async ({ id, title }) => {
       const { error } = await supabase.from('tasks').update({ title }).eq('id', id);
@@ -451,6 +498,49 @@ export function useTasks() {
     onSettled: invalidate,
   });
 
+  // 가상 발생분을 취소 = 그날치를 실제 행으로 굳히면서 취소로 저장(실체화).
+  // 이 행이 그날 발생분을 감지해 가상분을 밀어낸다. 이후엔 평범한 취소 task.
+  const materializeCancel = useMutation<Task, unknown, Task, Ctx>({
+    mutationFn: async (virt) => {
+      const { data, error } = await supabase
+        .from('tasks')
+        .insert({
+          user_id: userId,
+          space_id: virt.spaceId,
+          group_id: virt.groupId,
+          title: virt.title,
+          due_date: virt.dueDate,
+          position: virt.position,
+          recurrence_id: virt.recurrenceId,
+          cancelled_at: new Date().toISOString(),
+        })
+        .select('*')
+        .single();
+      if (error) throw error;
+      return toTask(data as TaskRow);
+    },
+    onMutate: async (virt) => {
+      const ctx = await snapshot();
+      const now = new Date().toISOString();
+      const optimistic: Task = {
+        ...virt,
+        id: `temp-${crypto.randomUUID()}`,
+        cancelledAt: now,
+        createdAt: now,
+        updatedAt: now,
+      };
+      patch((p) => [...p, optimistic]);
+      return ctx;
+    },
+    onError: (e, _v, ctx) => rollback(e, ctx, '취소하지 못했습니다.'),
+    onSuccess: (row) => {
+      toast('취소됨', {
+        action: { label: '실행 취소', onClick: () => uncancel.mutate(row) },
+      });
+    },
+    onSettled: invalidate,
+  });
+
   // 가상 발생분을 삭제 = 그날만 "건너뜀". 실제 행을 소프트 삭제 상태로 바로 심어
   // (deleted_at 세팅) virtualOccurrences가 그날 다시 만들지 않게 한다.
   const skipVirtual = useMutation<Task, unknown, Task, Ctx>({
@@ -533,6 +623,11 @@ export function useTasks() {
     // 가상 발생분이면 그날만 건너뜀(표식), 아니면 평범한 소프트 삭제.
     deleteTask: (task: Task) =>
       isVirtualOccurrence(task) ? skipVirtual.mutate(task) : remove.mutate(task),
+    // 취소(두 번째 '닫힘'): 가상 발생분이면 취소로 실체화, 아니면 평범한 취소.
+    cancelTask: (task: Task) =>
+      isVirtualOccurrence(task) ? materializeCancel.mutate(task) : cancel.mutate(task),
+    // 취소 해제(복구) — 다시 "할 일"로. 상세 모달의 '복구' 버튼에서 쓴다.
+    uncancelTask: (task: Task) => uncancel.mutate(task),
     moveTaskToGroup: (id: string, groupId: string | null) => move.mutate({ id, groupId }),
     /** 다른 날로 이동(명시적) — due_date를 바꾸고 되돌리기 토스트를 띄운다. */
     moveTaskToDate: (task: Task, dueDate: string) => {

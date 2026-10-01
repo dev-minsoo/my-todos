@@ -109,8 +109,9 @@ function buildSummary(tasks: Task[], range: DateRange): ReportSummary {
     if (inRange(dayOf(t.createdAt), range)) registered += 1;
 
     // 마감분(이행률·미수행·밀림)은 일반 할 일만. 습관은 E에서 따로 본다.
+    // 취소한 할 일은 "미이행"이 아니므로 분모(dueTotal)에서 뺀다(완료도 미수행도 아닌 '닫힘').
     const isHabit = t.recurrenceId != null;
-    if (!isHabit && inRange(t.dueDate, range)) {
+    if (!isHabit && t.cancelledAt == null && inRange(t.dueDate, range)) {
       dueTotal += 1;
       // 기간 종료까지 완료 = 완료일이 end 이전(반열림). early 완료도 이행으로 인정.
       if (doneDay != null && doneDay < range.end) {

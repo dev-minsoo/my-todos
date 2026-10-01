@@ -106,6 +106,7 @@ export function virtualOccurrences(
       title: rec.title,
       dueDate: date,
       completedAt: null,
+      cancelledAt: null,
       position: rec.position,
       memo: null,
       parentId: null,

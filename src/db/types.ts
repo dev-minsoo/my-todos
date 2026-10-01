@@ -9,6 +9,7 @@ export type Task = {
   title: string;
   dueDate: string; // 'YYYY-MM-DD'
   completedAt: string | null; // ISO, null = 할 일
+  cancelledAt: string | null; // ISO, null = 취소 아님 (completedAt과 대칭·상호배타인 두 번째 '닫힘' 상태)
   position: string; // fractional index (v0.1: created_at 순)
   memo: string | null; // 자유 메모, null = 없음 (최상위 task에만)
   parentId: string | null; // 서브태스크면 부모 task id, null = 최상위

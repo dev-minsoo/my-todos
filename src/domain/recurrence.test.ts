@@ -39,6 +39,7 @@ function makeTask(partial: Partial<Task>): Task {
     title: `task ${seq}`,
     dueDate: '2026-09-28',
     completedAt: null,
+    cancelledAt: null,
     position: 'a0',
     memo: null,
     parentId: null,
@@ -148,6 +149,7 @@ describe('virtualOccurrences', () => {
     expect(v.title).toBe('운동');
     expect(v.dueDate).toBe(MON);
     expect(v.completedAt).toBeNull();
+    expect(v.cancelledAt).toBeNull(); // 가상분은 취소도 없음(실체화 전)
     expect(v.recurrenceId).toBe('rx');
     expect(v.position).toBe('a5');
     expect(v.userId).toBe('u9');

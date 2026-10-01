@@ -1,5 +1,5 @@
 import type { Task } from '@/db/types';
-import { completionDay, daysBetween } from './dayBoundary';
+import { cancellationDay, completionDay, daysBetween } from './dayBoundary';
 
 /** 넘어옴 항목: 며칠 밀렸는지(overdueDays)를 함께 계산해 둔다 */
 export type CarriedTask = Task & { overdueDays: number };
@@ -11,6 +11,8 @@ export type DaySections = {
   open: Task[];
   /** 그날 완료한 항목 (완료 시각의 날짜에 남는다) */
   completed: Task[];
+  /** 그날 취소한 항목 (취소 시각의 날짜에 남는다 — 완료와 대칭, 넘어옴에서 빠진다) */
+  cancelled: Task[];
 };
 
 const alive = (t: Task) => t.deletedAt == null;
@@ -35,13 +37,23 @@ const byCompletedDesc = (a: Task, b: Task) => {
   return ac < bc ? 1 : ac > bc ? -1 : 0;
 };
 
+const byCancelledDesc = (a: Task, b: Task) => {
+  const ac = a.cancelledAt ?? '';
+  const bc = b.cancelledAt ?? '';
+  return ac < bc ? 1 : ac > bc ? -1 : 0;
+};
+
 /**
  * 보고 있는 날짜(viewedDate)에 대해 화면 섹션을 계산한다.
- * - open: dueDate === viewedDate && 미완료
- * - carried: viewedDate === today일 때만, dueDate < today && 미완료 (실제 dueDate는 바꾸지 않음)
+ * - open: dueDate === viewedDate && 미완료 && 미취소
+ * - carried: viewedDate === today일 때만, dueDate < today && 미완료 && 미취소 (실제 dueDate는 바꾸지 않음)
  * - completed: 완료 시각의 날짜 === viewedDate
+ * - cancelled: 취소 시각의 날짜 === viewedDate (완료와 대칭)
  *
- * 규칙상 세 섹션은 서로 겹치지 않는다.
+ * 규칙상 네 섹션은 서로 겹치지 않는다(완료·취소는 상호배타).
+ *
+ * 취소(두 번째 '닫힘' 상태): cancelledAt이 있으면 open·carried에서 빠진다 —
+ * 흐지부지 넘어오기만 하던 할 일을 멈추되(다음 날부터 안 뜸) 취소한 날의 기록으로 남긴다.
  *
  * 반복(습관형): recurrenceId가 있는 항목은 carried에서 제외한다. 실체화 후 다시 체크
  * 해제해도 과거 미완료 행이 오늘로 넘어오지 않게 하는 가드 — "월요일 안 한 운동은
@@ -52,12 +64,18 @@ export function deriveSections(tasks: Task[], viewedDate: string, today: string)
   const isToday = viewedDate === today;
 
   const open = items
-    .filter((t) => t.completedAt == null && t.dueDate === viewedDate)
+    .filter((t) => t.completedAt == null && t.cancelledAt == null && t.dueDate === viewedDate)
     .sort(byPosition);
 
   const carried: CarriedTask[] = isToday
     ? items
-        .filter((t) => t.completedAt == null && t.dueDate < today && t.recurrenceId == null)
+        .filter(
+          (t) =>
+            t.completedAt == null &&
+            t.cancelledAt == null &&
+            t.dueDate < today &&
+            t.recurrenceId == null
+        )
         .map((t) => ({ ...t, overdueDays: daysBetween(t.dueDate, today) }))
         .sort(byPosition)
     : [];
@@ -66,15 +84,31 @@ export function deriveSections(tasks: Task[], viewedDate: string, today: string)
     .filter((t) => t.completedAt != null && completionDay(t.completedAt) === viewedDate)
     .sort(byCompletedDesc);
 
-  return { carried, open, completed };
+  const cancelled = items
+    .filter((t) => t.cancelledAt != null && cancellationDay(t.cancelledAt) === viewedDate)
+    .sort(byCancelledDesc);
+
+  return { carried, open, completed, cancelled };
 }
 
 export type CompletionCount = { total: number; done: number };
 
-/** 하단 완료 카운트: "N개 중 M개 완료" */
+/**
+ * 하단 완료 카운트: "N개 중 M개 완료".
+ * 취소는 완료도 미완료도 아닌 '닫힘'이라 total·done 어디에도 넣지 않는다(카운트 중립).
+ */
 export function completionCount(s: DaySections): CompletionCount {
   const total = s.carried.length + s.open.length + s.completed.length;
   return { total, done: s.completed.length };
+}
+
+/**
+ * 섹션에 보여 줄 항목이 하나라도 있는지 (취소 포함).
+ * completionCount.total은 취소를 빼므로, "빈 날/빈 묶음" 판정엔 이걸 쓴다
+ * (취소만 있는 날·공간·그룹도 "취소" 섹션을 보여 주려고).
+ */
+export function hasAnyItems(s: DaySections): boolean {
+  return s.carried.length + s.open.length + s.completed.length + s.cancelled.length > 0;
 }
 
 /** 전체 탭에서 공간별로 묶은 한 덩어리 (SPEC §82) */
@@ -93,7 +127,7 @@ type SpaceMeta = { id: string; name: string; color: string };
  * "전체" 탭 화면: 공간별로 묶어서 각각 섹션과 완료 카운트를 계산한다 (SPEC §82, §160).
  * - 공간 순서는 넘겨받은 spaces 순서를 그대로 따른다.
  * - 넘어옴·완료 카운트는 공간마다 따로 계산된다 (회사 화면에 개인 일이 섞이지 않는다).
- * - 그날 보여 줄 항목이 하나도 없는 공간은 결과에서 제외한다.
+ * - 그날 보여 줄 항목이 하나도 없는 공간은 결과에서 제외한다(취소만 있어도 남긴다).
  */
 export function groupSectionsBySpace(
   tasks: Task[],
@@ -108,9 +142,8 @@ export function groupSectionsBySpace(
       viewedDate,
       today
     );
-    const count = completionCount(sections);
-    if (count.total === 0) continue;
-    groups.push({ spaceId: sp.id, name: sp.name, color: sp.color, sections, count });
+    if (!hasAnyItems(sections)) continue; // 취소만 있는 공간도 "취소" 섹션을 보여 준다
+    groups.push({ spaceId: sp.id, name: sp.name, color: sp.color, sections, count: completionCount(sections) });
   }
   return groups;
 }
