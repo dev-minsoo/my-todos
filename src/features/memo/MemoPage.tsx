@@ -28,6 +28,22 @@ export function MemoPage() {
 
   useEffect(() => () => flush(), [flush]);
 
+  // 탭을 떠나거나(앱 전환·숨김) 새로고침·닫기 직전에도 대기 중인 저장을 흘려보낸다.
+  // React 언마운트는 하드 새로고침·탭 닫기에서 안 불리므로, 그 창(<600ms 입력 손실)을 메운다.
+  // pagehide/visibilitychange(hidden) 둘 다 거는 건 모바일(백그라운드 전환)이 pagehide를 늘 안 쏘기 때문.
+  useEffect(() => {
+    const onPageHide = () => flush();
+    const onVisibility = () => {
+      if (document.visibilityState === 'hidden') flush();
+    };
+    window.addEventListener('pagehide', onPageHide);
+    document.addEventListener('visibilitychange', onVisibility);
+    return () => {
+      window.removeEventListener('pagehide', onPageHide);
+      document.removeEventListener('visibilitychange', onVisibility);
+    };
+  }, [flush]);
+
   // 에디터가 바뀔 때마다 디바운스 타이머를 리셋한다. 저장은 사용자가 실제로 고칠 때만 일어난다
   // (초기 content 주입은 onUpdate를 발생시키지 않음 → 빈 값 덮어쓰기 없음).
   const handleChange = useCallback(
