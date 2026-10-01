@@ -19,8 +19,18 @@ export type Task = {
   deletedAt: string | null; // ISO, null = 살아있음 (소프트 삭제)
 };
 
-/** 반복 규칙. v1 범위: 매일 / 매주 특정 요일. jsonb라 후일 격주·매월 등으로 확장. */
-export type RecurrenceRule = { type: 'daily' } | { type: 'weekly'; weekdays: number[] };
+/**
+ * 반복 규칙. jsonb라 유니온을 넓혀도 마이그레이션이 필요 없다.
+ * - daily: 매일.
+ * - weekly: 특정 요일. interval(생략·1 = 매주, 2 = 격주, 3… = N주마다) — 시작일이 든 주를 0으로 센다.
+ * - monthly: 매월 day일(1~31). 그 달에 없는 날(31일 등)은 말일로 당긴다.
+ * - everyNDays: 시작일 기준 interval일마다.
+ */
+export type RecurrenceRule =
+  | { type: 'daily' }
+  | { type: 'weekly'; weekdays: number[]; interval?: number }
+  | { type: 'monthly'; day: number }
+  | { type: 'everyNDays'; interval: number };
 
 /**
  * 반복 할 일의 규칙(예: "매일 운동", "월·수·금 약").

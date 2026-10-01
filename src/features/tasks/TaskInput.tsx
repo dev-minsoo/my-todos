@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react';
-import { getDay, parseISO } from 'date-fns';
+import { getDate, getDay, parseISO } from 'date-fns';
 import { ArrowUp, ChevronDown, Folder, Plus, Repeat } from 'lucide-react';
 import { ALL_TAB, type RecurrenceRule } from '@/db/types';
 import { useUiStore } from '@/store/uiStore';
@@ -161,6 +161,7 @@ export function TaskInput() {
                     rule={rule}
                     onChange={setRule}
                     defaultWeekday={getDay(parseISO(viewedDate))}
+                    defaultDayOfMonth={getDate(parseISO(viewedDate))}
                   />
                 </div>
               </>

@@ -86,7 +86,31 @@ describe('parseRule (jsonb 방어적 파싱)', () => {
     expect(parseRule(undefined)).toEqual({ type: 'daily' });
     expect(parseRule('daily')).toEqual({ type: 'daily' });
     expect(parseRule({})).toEqual({ type: 'daily' });
-    expect(parseRule({ type: 'monthly' })).toEqual({ type: 'daily' });
+    expect(parseRule({ type: 'monthly' })).toEqual({ type: 'daily' }); // day 누락
+  });
+
+  it('weekly interval(격주 등): ≥2만 보존, 1·불량은 생략(= 매주)', () => {
+    expect(parseRule({ type: 'weekly', weekdays: [1], interval: 2 })).toEqual({
+      type: 'weekly',
+      weekdays: [1],
+      interval: 2,
+    });
+    expect(parseRule({ type: 'weekly', weekdays: [1], interval: 1 })).toEqual({ type: 'weekly', weekdays: [1] });
+    expect(parseRule({ type: 'weekly', weekdays: [1], interval: 0 })).toEqual({ type: 'weekly', weekdays: [1] });
+    expect(parseRule({ type: 'weekly', weekdays: [1], interval: 2.5 })).toEqual({ type: 'weekly', weekdays: [1] });
+  });
+
+  it('monthly day는 1~31 정수만, 벗어나면 매일로 폴백', () => {
+    expect(parseRule({ type: 'monthly', day: 15 })).toEqual({ type: 'monthly', day: 15 });
+    expect(parseRule({ type: 'monthly', day: 31 })).toEqual({ type: 'monthly', day: 31 });
+    expect(parseRule({ type: 'monthly', day: 0 })).toEqual({ type: 'daily' });
+    expect(parseRule({ type: 'monthly', day: 32 })).toEqual({ type: 'daily' });
+  });
+
+  it('everyNDays interval은 ≥1 정수만, 벗어나면 매일로 폴백', () => {
+    expect(parseRule({ type: 'everyNDays', interval: 3 })).toEqual({ type: 'everyNDays', interval: 3 });
+    expect(parseRule({ type: 'everyNDays', interval: 0 })).toEqual({ type: 'daily' });
+    expect(parseRule({ type: 'everyNDays' })).toEqual({ type: 'daily' });
   });
 });
 
@@ -99,6 +123,17 @@ describe('ruleLabel', () => {
   });
   it('7요일 전부면 매일', () => {
     expect(ruleLabel({ type: 'weekly', weekdays: [0, 1, 2, 3, 4, 5, 6] })).toBe('매일');
+  });
+  it('격주(interval 2)', () => {
+    expect(ruleLabel({ type: 'weekly', weekdays: [1] })).toBe('월'); // interval 없음 = 매주
+    expect(ruleLabel({ type: 'weekly', weekdays: [1], interval: 2 })).toBe('격주 월');
+    expect(ruleLabel({ type: 'weekly', weekdays: [1, 5], interval: 3 })).toBe('3주마다 월·금');
+  });
+  it('매월 N일', () => {
+    expect(ruleLabel({ type: 'monthly', day: 15 })).toBe('매월 15일');
+  });
+  it('N일마다', () => {
+    expect(ruleLabel({ type: 'everyNDays', interval: 3 })).toBe('3일마다');
   });
 });
 
@@ -126,6 +161,49 @@ describe('occursOn', () => {
   it('매주라도 시작일 경계는 지킨다', () => {
     const rec = makeRec({ rule: { type: 'weekly', weekdays: [1] }, startDate: TUE }); // 월 반복이지만 시작 화요일
     expect(occursOn(rec, MON)).toBe(false); // 시작 전
+  });
+});
+
+describe('occursOn — 확장 규칙(격주·매월·N일마다)', () => {
+  // 2026-09-28 = 월. 이후 월요일: 10-05, 10-12, 10-19 …
+  it('격주(N주마다): 시작 주를 0으로 그 간격의 주에만', () => {
+    const rec = makeRec({ rule: { type: 'weekly', weekdays: [1], interval: 2 }, startDate: '2026-09-28' });
+    expect(occursOn(rec, '2026-09-28')).toBe(true); // 0주차
+    expect(occursOn(rec, '2026-10-05')).toBe(false); // 1주차
+    expect(occursOn(rec, '2026-10-12')).toBe(true); // 2주차
+    expect(occursOn(rec, '2026-10-19')).toBe(false); // 3주차
+    expect(occursOn(rec, '2026-09-29')).toBe(false); // 요일(화) 안 맞음
+  });
+
+  it('interval 없는 weekly는 기존대로 매주', () => {
+    const rec = makeRec({ rule: { type: 'weekly', weekdays: [1] }, startDate: '2026-09-28' });
+    expect(occursOn(rec, '2026-09-28')).toBe(true);
+    expect(occursOn(rec, '2026-10-05')).toBe(true);
+  });
+
+  it('매월 N일: 그 달의 해당 날짜에만', () => {
+    const rec = makeRec({ rule: { type: 'monthly', day: 15 }, startDate: '2026-09-01' });
+    expect(occursOn(rec, '2026-09-15')).toBe(true);
+    expect(occursOn(rec, '2026-09-16')).toBe(false);
+    expect(occursOn(rec, '2026-10-15')).toBe(true);
+    expect(occursOn(rec, '2026-08-15')).toBe(false); // 시작 전
+  });
+
+  it('매월 31일: 그 달에 없으면 말일로 당긴다', () => {
+    const rec = makeRec({ rule: { type: 'monthly', day: 31 }, startDate: '2026-01-01' });
+    expect(occursOn(rec, '2026-02-28')).toBe(true); // 2월 말일(2026 평년)
+    expect(occursOn(rec, '2026-02-27')).toBe(false);
+    expect(occursOn(rec, '2026-04-30')).toBe(true); // 4월 말일
+    expect(occursOn(rec, '2026-01-31')).toBe(true); // 31일 있는 달
+  });
+
+  it('N일마다: 시작일 기준 간격의 배수인 날에만', () => {
+    const rec = makeRec({ rule: { type: 'everyNDays', interval: 3 }, startDate: '2026-09-01' });
+    expect(occursOn(rec, '2026-09-01')).toBe(true); // 0일
+    expect(occursOn(rec, '2026-09-02')).toBe(false);
+    expect(occursOn(rec, '2026-09-04')).toBe(true); // 3일
+    expect(occursOn(rec, '2026-09-07')).toBe(true); // 6일
+    expect(occursOn(rec, '2026-08-31')).toBe(false); // 시작 전
   });
 });
 
