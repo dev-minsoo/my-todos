@@ -6,7 +6,7 @@
 //  · 활동량(완료수·추이·분포)   = 이 기간에 완료한 "모든" 항목(습관 체크 포함).
 //  · 마감분 이행률/미수행/밀림   = 이 기간에 마감이 걸린 "일반 할 일"(반복 제외).
 //  · 자주 등록(빈도)            = 이 기간에 등록한 "일반 할 일"(반복 제외).
-//  · 습관 이행률(E)             = 반복 규칙 기준(occursOn 재계산 ↔ 실체화된 완료).
+//  · 습관 이행률(E)             = 반복 규칙 기준(occursOn 재계산 ↔ 실체화된 완료). 취소한 발생일은 분모에서 뺀다.
 import { parseISO } from 'date-fns';
 import type { Group, Recurrence, Space, Task } from '@/db/types';
 import { daysBetween, toDateStr } from './dayBoundary';
@@ -211,6 +211,7 @@ function buildFrequency(tasks: Task[], range: DateRange): FrequencyItem[] {
 /**
  * 습관 이행률(E). 반복 규칙으로 기간 내(오늘까지) 발생 예정일을 재계산하고,
  * 실체화되어 완료된 날과 대조한다.
+ * 취소한 발생일(실체화 후 cancelled_at)은 발생(분모)에서 뺀다 — 완료도 미이행도 아닌 '닫힘'.
  * 한계: 규칙 버전이 없어 규칙을 바꾸면 과거 발생일도 "현재 규칙"으로 재계산된다(문서화된 절충).
  */
 function buildHabits(
@@ -221,20 +222,30 @@ function buildHabits(
 ): HabitAdherence[] {
   const days = daysOf(range).filter((d) => d <= today); // 미래는 아직 판정하지 않음
 
-  // 반복별 "완료한 due_date" 집합(실체화된 행 기준)
+  // 반복별 실체화된 행을 due_date로 모은다: 완료한 날 / 취소한 날.
+  // 취소는 "하기로 했지만 흐지부지 닫은" 것 → 미이행이 아니므로 발생(분모)에서 뺀다(일반 할 일과 대칭).
   const doneByRec = new Map<string, Set<string>>();
+  const cancelledByRec = new Map<string, Set<string>>();
   for (const t of tasks) {
-    if (t.recurrenceId == null || t.completedAt == null) continue;
-    let set = doneByRec.get(t.recurrenceId);
-    if (!set) doneByRec.set(t.recurrenceId, (set = new Set()));
-    set.add(t.dueDate);
+    if (t.recurrenceId == null) continue;
+    if (t.completedAt != null) {
+      let set = doneByRec.get(t.recurrenceId);
+      if (!set) doneByRec.set(t.recurrenceId, (set = new Set()));
+      set.add(t.dueDate);
+    } else if (t.cancelledAt != null) {
+      let set = cancelledByRec.get(t.recurrenceId);
+      if (!set) cancelledByRec.set(t.recurrenceId, (set = new Set()));
+      set.add(t.dueDate);
+    }
   }
 
   const out: HabitAdherence[] = [];
   for (const rec of recurrences) {
     if (rec.deletedAt != null) continue;
-    const occDays = days.filter((d) => occursOn(rec, d));
-    if (occDays.length === 0) continue; // 기간 내 발생 없음 → 표시 안 함
+    const cancelled = cancelledByRec.get(rec.id);
+    // 취소한 발생일은 분모에서 제외(완료도 미이행도 아닌 '닫힘').
+    const occDays = days.filter((d) => occursOn(rec, d) && !cancelled?.has(d));
+    if (occDays.length === 0) continue; // 기간 내 (취소 제외) 발생 없음 → 표시 안 함
     const done = doneByRec.get(rec.id);
     const doneCount = done ? occDays.filter((d) => done.has(d)).length : 0;
     out.push({

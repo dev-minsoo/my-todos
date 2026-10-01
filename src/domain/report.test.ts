@@ -233,6 +233,34 @@ describe('buildReport habits (E)', () => {
     expect(r.habits[0]).toMatchObject({ occurrences: 4, done: 0, ruleLabel: '월' });
   });
 
+  it('취소한 반복 발생일은 이행률 분모(발생)에서 빠진다', () => {
+    // 매일 규칙(09-05~09-30 = 26일). 하루 완료, 하루 취소.
+    const r = run({
+      tasks: [
+        task({ id: 'hd', recurrenceId: 'r1', dueDate: '2026-09-07', completedAt: '2026-09-07T09:00:00.000Z' }),
+        task({ id: 'hc', recurrenceId: 'r1', dueDate: '2026-09-08', completedAt: null, cancelledAt: '2026-09-09T09:00:00.000Z' }),
+      ],
+      recurrences: [recurrence({ id: 'r1', rule: { type: 'daily' }, startDate: '2026-09-05' })],
+    });
+    // 09-08은 취소로 발생에서 제외 → 26-1 = 25일. 완료 1(09-07) → 1/25
+    expect(r.habits[0]).toMatchObject({ occurrences: 25, done: 1 });
+    expect(r.habits[0].rate).toBeCloseTo(1 / 25, 5);
+  });
+
+  it('발생이 전부 취소되면 그 습관은 표시하지 않는다', () => {
+    // 월요일(09-07,14,21,28) 규칙인데 네 날 모두 취소 → 분모 0 → 리스트에서 빠짐
+    const r = run({
+      tasks: [
+        task({ id: 'c1', recurrenceId: 'rw', dueDate: '2026-09-07', completedAt: null, cancelledAt: '2026-09-07T09:00:00.000Z' }),
+        task({ id: 'c2', recurrenceId: 'rw', dueDate: '2026-09-14', completedAt: null, cancelledAt: '2026-09-14T09:00:00.000Z' }),
+        task({ id: 'c3', recurrenceId: 'rw', dueDate: '2026-09-21', completedAt: null, cancelledAt: '2026-09-21T09:00:00.000Z' }),
+        task({ id: 'c4', recurrenceId: 'rw', dueDate: '2026-09-28', completedAt: null, cancelledAt: '2026-09-28T09:00:00.000Z' }),
+      ],
+      recurrences: [recurrence({ id: 'rw', title: '월요일 회의', rule: { type: 'weekly', weekdays: [1] }, startDate: '2026-09-01' })],
+    });
+    expect(r.habits).toHaveLength(0);
+  });
+
   it('미래 날짜는 아직 발생으로 세지 않는다(today까지만)', () => {
     const r = buildReport({
       tasks: [],
