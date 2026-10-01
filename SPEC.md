@@ -78,9 +78,10 @@ My Todos는 기존 `task-trail` 프로젝트를 **고치는 게 아니라 새로
 └───────────────────────────────────────────┘
 ```
 
-- **섹션(넘어옴/할 일/완료)은 사용자가 고르는 상태가 아니다.** `due_date`와 `completed_at`으로부터 자동으로 나뉜다.
+- **섹션(넘어옴/할 일/완료/취소)은 사용자가 고르는 상태가 아니다.** `due_date`·`completed_at`·`cancelled_at`으로부터 자동으로 나뉜다. "취소" 섹션은 그날 취소한 항목이 있을 때만 흐리게 나타난다(§4.11).
 - **전체 탭**에서는 공간별로 묶어서 보여 준다. 각 묶음에 공간 색과 완료 카운트(`개인 1/3`)가 붙는다.
 - 모바일에서는 같은 구조를 세로로. 입력칸은 하단 고정.
+- **하루 화면 외 화면들**(사이드바/상단 아이콘에서 진입, 뒤로 가면 하루로 복귀): 검색 · **메모**(할 일과 무관한 전역 단일 마크다운 문서, 작성+미리보기·자동 저장) · 기록(달력) · 리포트 · 설정 · 휴지통.
 
 ---
 
@@ -126,10 +127,18 @@ My Todos는 기존 `task-trail` 프로젝트를 **고치는 게 아니라 새로
 
 ### 4.9 완료 카운트
 - 하단에 그날 기준 "N개 중 M개 완료". 전체 탭에서는 공간별 카운트 + 합산.
+- **취소 항목은 분모·분자 어디에도 넣지 않는다**(완료도 미완료도 아닌 '닫힘'). "보여 줄 게 있나"(취소 포함)와 "셀 게 있나"(취소 제외)는 다른 판정이다 → `hasAnyItems` vs `completionCount`.
 
 ### 4.10 순서 (v0.1 / v0.3)
 - v0.1: `created_at` 오름차순. `position`(fractional index) 컬럼은 예약만.
 - v0.3: 드래그로 순서 변경 → `fractional-indexing`으로 한 행만 update.
+
+### 4.11 취소 (사용자 요청 — 세 번째 종료 상태)
+- **트리거**: 항목 우측 "취소" 버튼 또는 상세 모달의 "취소" 버튼. `cancelled_at = now`, 동시에 `completed_at = null`(상호배타).
+- **귀속**: 취소한 '날'(`cancellationDay(cancelledAt)`, 완료의 `completionDay`와 대칭)의 "취소" 섹션에 **취소선·흐리게**로 남는다.
+- **넘어옴 중지**: `cancelled_at`이 있으면 `open`·`carried`에서 빠진다 → 다음 날부터 안 뜬다(넘어옴은 여전히 계산일 뿐, `due_date`는 안 바꾼다).
+- **복구**: 취소 항목의 복구(↺) 또는 상세 모달 "복구" → `cancelled_at = null` → 다시 "할 일". Undo 토스트로도 즉시 되돌림.
+- **중립**: 완료 카운트(§4.9)·리포트 이행률 분모·달력 완료율·완료 공간 점에서 모두 제외. 가상 반복분을 취소하면 그날 실제 행으로 실체화된다(완료와 동일 패턴).
 
 ---
 
@@ -215,6 +224,7 @@ create table tasks (
   title        text not null,
   due_date     date not null,           -- v0.1: 항상 존재 (날짜 없는 일 없음)
   completed_at timestamptz,             -- null = 할 일, 값 = 완료(그 시각의 날짜에 표시)
+  cancelled_at timestamptz,             -- 완료와 대칭인 두 번째 '닫힘' 상태(취소). 0005_task_cancel.sql
   position     text not null,           -- fractional index (v0.1: created_at 순 사용)
   created_at   timestamptz not null default now(),
   updated_at   timestamptz not null default now(),
@@ -231,8 +241,10 @@ create policy "own rows" on tasks  using (user_id = auth.uid()) with check (user
 ```
 
 - `status` 컬럼을 두지 않는다. 완료는 `completed_at` 하나로. (이름 기반 상태/FK 문제 원천 차단)
+- **취소(`cancelled_at`)** — 사용자 요청으로 추가한 **세 번째 종료 상태**. "진행 중" 같은 워크플로 상태가 아니라 완료와 대칭인 두 번째 '닫힘'이다: 흐지부지 넘어오기만 하던 할 일을 멈추되(넘어옴에서 빠짐) 취소한 날(`cancellationDay(cancelledAt)`)의 "취소" 섹션에 흐리게 남긴다. `completed_at`과 상호배타(앱 레이어가 보장), 완료 카운트·이행률 분모에서 제외. 복구하면 다시 "할 일". §4.11.
 - 메모·반복·태그는 필요해질 때 컬럼으로 추가.
 - **날짜 없는 "언젠가" 항목은 v0.1에 없다** (모든 task에 `due_date`).
+- **메모 탭 — `notes` 테이블(유저당 1행):** 할 일별 메모(`tasks.memo`)와 **다른 것**. 앱 전체에서 한 장만 쓰는 자유 마크다운 문서다(`notes(id, user_id unique, content, created_at, updated_at)`, 단일 문서라 `deleted_at` 없음). 마이그레이션 `0006_notes.sql`. 별도 화면(AppView `'memo'`), 작성+미리보기(react-markdown + remark-gfm), 자동 저장. §3 화면 목록 참조.
 - **하루 기준은 자정(로컬).** 후일 "하루 시작 시각"(예: 새벽 4시) 설정을 위해 경계 계산을 한 함수(`dayBoundary`)에 모은다.
 - **시드:** 최초 로그인 후 공간이 0개면 클라이언트가 `개인`/`회사` 두 공간을 생성(후일 DB 트리거로 이동 가능).
 
@@ -242,6 +254,7 @@ type Task = {
   id: string; userId: string; spaceId: string;
   title: string; dueDate: string;          // 'YYYY-MM-DD'
   completedAt: string | null;              // ISO or null
+  cancelledAt: string | null;              // ISO or null (완료와 상호배타)
   position: string;
   createdAt: string; updatedAt: string; deletedAt: string | null;
 };
@@ -327,9 +340,9 @@ my-todos/
 |---|---|
 | **v0.1 (핵심)** | Supabase 스키마+RLS · 익명 로그인 · 하루 화면(오늘) + ←→ 날짜 이동 · 추가/체크/인라인 수정/삭제 · 넘어옴 자동 계산 · 공간(개인/회사 시드, 탭[전체\|개인\|회사], 공간 추가/수정/삭제) · Undo 토스트(낙관적+롤백) · 완료 카운트 · 반응형(모바일 우선) · Vercel 배포 |
 | **v0.2** | 한국어 날짜 인식(§7) · 다른 날/공간 이동(메뉴+스와이프) · 스와이프 제스처(완료/내일로)·애니메이션 · 하루 시작 시각 설정 · 이메일 회원가입(익명 승격) · JSON 백업 내보내기 |
-| **v0.3** | 드래그 순서 변경(`fractional-indexing`) · 키보드 단축키(`n` 추가, `j`/`k` 이동, `x` 완료, `e` 편집, `1~` 탭, `←→` 날짜) |
+| **v0.3** | 드래그 순서 변경(`fractional-indexing`) · 키보드 단축키 → **전면 제거**(`n`/`j`/`k`/`x`/`e`/`1~` 삭제 — "없느니만 못함". `←→` 날짜 이동만 DayHeader에 유지) · **취소 상태**(§4.11, 완료와 대칭인 두 번째 닫힘 상태 — 넘어옴 중지·카운트 제외) · **메모 탭**(전역 단일 마크다운 문서, 작성+미리보기·자동 저장) |
 | **v0.4** | 라즈베리파이 셀프호스팅(Supabase self-host) 배포 옵션 · (선택) 오프라인 캐시 강화 |
-| **이후** | 메모 · 반복 · 검색 · 날짜 없는 "나중에" 목록 · **공유 공간**(멤버 있는 공간: `space_members` + 권한) |
+| **이후** | 반복 · 검색 · 날짜 없는 "나중에" 목록 · **공유 공간**(멤버 있는 공간: `space_members` + 권한) |
 
 ---
 
