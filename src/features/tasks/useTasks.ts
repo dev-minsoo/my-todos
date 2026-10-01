@@ -614,6 +614,8 @@ export function useTasks() {
     recurrenceSkips: skipQuery.data ?? [],
     isLoading: query.isLoading,
     error: query.error,
+    /** 불러오기 실패 시 재시도용(ErrorState의 "다시 시도"). Promise를 돌려준다. */
+    refetch: query.refetch,
     addTask: (input: AddTaskInput) =>
       add.mutate({ ...input, position: nextTaskPosition(input.spaceId, input.groupId ?? null) }),
     // 가상 발생분이면 실체화(완료로 굳힘), 아니면 평범한 토글.

@@ -161,6 +161,7 @@ export function useRecurrences() {
     recurrences: query.data ?? [],
     isLoading: query.isLoading,
     error: query.error,
+    refetch: query.refetch,
     addRecurrence: (input: AddRecurrenceInput) =>
       add.mutate({ ...input, position: nextPosition() }),
     updateRecurrence: (input: { id: string; title?: string; rule?: RecurrenceRule }) =>

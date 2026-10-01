@@ -190,7 +190,7 @@ export function TaskInput() {
             type="button"
             onClick={submit}
             aria-label="추가"
-            className="grid size-7 shrink-0 place-items-center rounded-lg bg-accent text-accentFg transition hover:opacity-90 active:scale-95"
+            className="grid size-10 shrink-0 place-items-center rounded-lg bg-accent text-accentFg transition hover:opacity-90 active:scale-95 md:size-7"
           >
             <ArrowUp className="size-4" />
           </button>

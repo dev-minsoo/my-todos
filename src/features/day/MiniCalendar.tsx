@@ -63,9 +63,12 @@ export function MiniCalendar({
             <button
               key={day}
               onClick={() => onPick(day)}
+              aria-label={format(dd, 'M월 d일', { locale: ko })}
+              aria-current={isTod ? 'date' : undefined}
+              aria-pressed={selected}
               className={cn(
                 'grid size-9 place-items-center rounded-lg text-sm transition',
-                !inMonth && 'text-muted/50',
+                !inMonth && 'text-muted',
                 selected ? 'bg-accent font-semibold text-accentFg' : 'hover:bg-surface2',
                 !selected && isTod && 'font-semibold text-accent ring-1 ring-accent/40'
               )}

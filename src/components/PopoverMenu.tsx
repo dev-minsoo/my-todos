@@ -18,6 +18,15 @@ type Props = {
 
 const DEFAULT_WIDTH = 224;
 
+/** 메뉴 안에서 키보드로 오갈 수 있는(보이는) 요소들 */
+function menuFocusables(node: HTMLElement): HTMLElement[] {
+  return Array.from(
+    node.querySelectorAll<HTMLElement>(
+      'a[href], button:not([disabled]), textarea:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])'
+    )
+  ).filter((el) => el.offsetParent !== null);
+}
+
 /**
  * 트리거 버튼 + body 포털 메뉴. 트리거 위치를 기준으로 좌표를 잡아
  * 스크롤 컨테이너의 clip을 피하고, 화면 아래쪽이면 위로 편다.
@@ -80,6 +89,38 @@ export function PopoverMenu({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
+  // 열리면 메뉴 안 첫 요소로 포커스를 옮긴다(키보드 사용자가 트리거에 갇히지 않게).
+  useEffect(() => {
+    if (!open) return;
+    const raf = requestAnimationFrame(() => {
+      const node = menuRef.current;
+      if (node) menuFocusables(node)[0]?.focus();
+    });
+    return () => cancelAnimationFrame(raf);
+  }, [open]);
+
+  // ↑/↓(및 Home/End)로 메뉴 항목 사이를 순환 이동한다.
+  function onMenuKeyDown(e: React.KeyboardEvent) {
+    const node = menuRef.current;
+    if (!node) return;
+    const items = menuFocusables(node);
+    if (items.length === 0) return;
+    const idx = items.indexOf(document.activeElement as HTMLElement);
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      items[idx < 0 ? 0 : (idx + 1) % items.length].focus();
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      items[idx < 0 ? items.length - 1 : (idx - 1 + items.length) % items.length].focus();
+    } else if (e.key === 'Home') {
+      e.preventDefault();
+      items[0].focus();
+    } else if (e.key === 'End') {
+      e.preventDefault();
+      items[items.length - 1].focus();
+    }
+  }
+
   return (
     <>
       <button
@@ -102,9 +143,11 @@ export function PopoverMenu({
           <div
             ref={menuRef}
             role="menu"
+            aria-label={triggerLabel}
             className="fixed z-50 overflow-hidden rounded-xl border border-border bg-surface py-1 shadow-lg"
             style={{ left: pos.left, top: pos.top, bottom: pos.bottom, width }}
             onMouseDown={(e) => e.stopPropagation()}
+            onKeyDown={onMenuKeyDown}
           >
             {children(close)}
           </div>,

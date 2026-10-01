@@ -138,6 +138,7 @@ export function TaskItem({
   return (
     <motion.div
       layout
+      role="listitem"
       data-task-id={task.id}
       initial={{ opacity: 0, y: -6 }}
       animate={{ opacity: 1, y: 0 }}
@@ -197,7 +198,7 @@ export function TaskItem({
             whileTap={{ scale: 0.85 }}
             aria-label="취소 해제"
             title="취소 해제(다시 할 일로)"
-            className="shrink-0 text-muted transition hover:text-accent"
+            className="shrink-0 text-muted transition hover:text-accent max-md:p-2"
           >
             <RotateCcw className="size-5" />
           </motion.button>
@@ -207,7 +208,7 @@ export function TaskItem({
             whileTap={{ scale: 0.8 }}
             aria-label={done ? '완료 해제' : '완료'}
             className={cn(
-              'shrink-0 transition',
+              'shrink-0 transition max-md:p-2',
               done ? 'text-accent' : 'text-muted hover:text-accent'
             )}
           >
@@ -234,7 +235,7 @@ export function TaskItem({
         ) : (
           <button
             onClick={() => openDetail(task.id)}
-            aria-label="상세 보기"
+            aria-label={`상세 보기: ${task.title}`}
             className={cn(
               'min-w-0 flex-1 truncate text-left text-sm',
               (done || cancelled) && 'text-muted line-through'
@@ -296,7 +297,7 @@ export function TaskItem({
             {...moveProps!}
             align="end"
             triggerLabel="이동"
-            triggerClassName="shrink-0 rounded-md p-1 text-muted opacity-0 transition hover:text-accent focus-visible:opacity-100 group-hover:opacity-100 max-md:opacity-100"
+            triggerClassName="shrink-0 rounded-md p-1 text-muted opacity-0 transition hover:text-accent focus-visible:opacity-100 group-hover:opacity-100 max-md:p-2 max-md:opacity-100"
             trigger={<ArrowRightLeft className="size-4" />}
           />
         )}
@@ -307,7 +308,7 @@ export function TaskItem({
           <button
             onClick={startEdit}
             aria-label="제목 수정"
-            className="shrink-0 rounded-md p-1 text-muted opacity-0 transition hover:text-accent focus-visible:opacity-100 group-hover:opacity-100 max-md:opacity-100"
+            className="shrink-0 rounded-md p-1 text-muted opacity-0 transition hover:text-accent focus-visible:opacity-100 group-hover:opacity-100 max-md:p-2 max-md:opacity-100"
           >
             <Pencil className="size-4" />
           </button>
@@ -320,7 +321,7 @@ export function TaskItem({
             onClick={() => onCancel(task)}
             aria-label="취소"
             title="취소(흐지부지된 할 일 닫기)"
-            className="shrink-0 rounded-md p-1 text-muted opacity-0 transition hover:text-amber-500 focus-visible:opacity-100 group-hover:opacity-100 max-md:opacity-100"
+            className="shrink-0 rounded-md p-1 text-muted opacity-0 transition hover:text-amber-500 focus-visible:opacity-100 group-hover:opacity-100 max-md:p-2 max-md:opacity-100"
           >
             <Ban className="size-4" />
           </button>

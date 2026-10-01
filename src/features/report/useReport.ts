@@ -14,6 +14,7 @@ export type UseReport = {
   report: ReportResult;
   isLoading: boolean;
   error: unknown;
+  refetch: () => Promise<unknown>;
 };
 
 const DEFAULT_PRESET: PeriodPreset = 'thisMonth';
@@ -25,10 +26,10 @@ const DEFAULT_PRESET: PeriodPreset = 'thisMonth';
  */
 export function useReport(): UseReport {
   const [preset, setPreset] = useState<PeriodPreset>(DEFAULT_PRESET);
-  const { tasks, isLoading: lt, error: et } = useTasks();
-  const { recurrences, isLoading: lr, error: er } = useRecurrences();
-  const { spaces, isLoading: ls, error: es } = useSpaces();
-  const { groups, isLoading: lg, error: eg } = useGroups();
+  const { tasks, isLoading: lt, error: et, refetch: ft } = useTasks();
+  const { recurrences, isLoading: lr, error: er, refetch: fr } = useRecurrences();
+  const { spaces, isLoading: ls, error: es, refetch: fs } = useSpaces();
+  const { groups, isLoading: lg, error: eg, refetch: fg } = useGroups();
 
   const today = todayStr();
   const range = useMemo(() => periodRange(preset, today), [preset, today]);
@@ -45,5 +46,6 @@ export function useReport(): UseReport {
     report,
     isLoading: lt || lr || ls || lg,
     error: et ?? er ?? es ?? eg,
+    refetch: () => Promise.all([ft(), fr(), fs(), fg()]),
   };
 }

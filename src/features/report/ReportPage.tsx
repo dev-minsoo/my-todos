@@ -1,6 +1,7 @@
 import { Bar, BarChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { CalendarRange, CheckCircle2, PlusCircle, Repeat, Target, XCircle } from 'lucide-react';
 import { PageHeader } from '@/components/PageHeader';
+import { ErrorState } from '@/components/ErrorState';
 import { cn } from '@/lib/utils';
 import { PERIOD_LABELS, PERIOD_PRESETS, type PeriodPreset } from '@/domain/period';
 import type { DistributionItem, HabitAdherence } from '@/domain/report';
@@ -18,7 +19,7 @@ function formatDayLabel(date: string): string {
 }
 
 export default function ReportPage() {
-  const { preset, setPreset, report, isLoading } = useReport();
+  const { preset, setPreset, report, isLoading, error, refetch } = useReport();
   const { summary, activity, bySpace, byGroup, frequency, habits } = report;
 
   const hasActivity = summary.completed > 0;
@@ -33,7 +34,11 @@ export default function ReportPage() {
           <PeriodPicker preset={preset} onPick={setPreset} />
 
           {isLoading ? (
-            <p className="py-10 text-center text-sm text-muted">불러오는 중…</p>
+            <p role="status" className="py-10 text-center text-sm text-muted">
+              불러오는 중…
+            </p>
+          ) : error ? (
+            <ErrorState compact onRetry={() => refetch()} />
           ) : (
             <>
               {/* A. 요약 */}

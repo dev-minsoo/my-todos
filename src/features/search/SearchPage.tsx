@@ -8,6 +8,7 @@ import { useTasks } from '@/features/tasks/useTasks';
 import { useSpaces } from '@/features/spaces/useSpaces';
 import { searchTasks } from '@/domain/search';
 import { PageHeader } from '@/components/PageHeader';
+import { ErrorState } from '@/components/ErrorState';
 import { cn } from '@/lib/utils';
 
 /** dueDate 'YYYY-MM-DD' → 'M월 d일' (파싱 실패 시 원문) */
@@ -24,7 +25,7 @@ export function SearchPage() {
   const setCurrentTab = useUiStore((s) => s.setCurrentTab);
   const setView = useUiStore((s) => s.setView);
 
-  const { tasks, isLoading } = useTasks();
+  const { tasks, isLoading, error, refetch } = useTasks();
   const { spaces } = useSpaces();
   const spaceById = useMemo(() => new Map(spaces.map((s) => [s.id, s])), [spaces]);
 
@@ -76,8 +77,12 @@ export function SearchPage() {
                 <p className="mt-1 text-sm text-muted">제목으로 할 일을 검색해요</p>
                 <p className="text-xs text-muted">날짜·공간을 가로질러 찾고, 눌러서 그날로 이동해요</p>
               </EmptyHint>
+            ) : error && tasks.length === 0 ? (
+              <ErrorState compact onRetry={() => refetch()} />
             ) : isLoading && tasks.length === 0 ? (
-              <p className="py-10 text-center text-sm text-muted">불러오는 중…</p>
+              <p role="status" className="py-10 text-center text-sm text-muted">
+                불러오는 중…
+              </p>
             ) : results.length === 0 ? (
               <EmptyHint icon={<Search className="size-9 text-muted" strokeWidth={1.5} />}>
                 <p className="mt-1 text-sm text-muted">

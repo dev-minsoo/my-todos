@@ -145,6 +145,7 @@ export function useGroups() {
     groups: query.data ?? [],
     isLoading: query.isLoading,
     error: query.error,
+    refetch: query.refetch,
     addGroup: (input: { spaceId: string; name: string }) => add.mutate(input),
     /** 생성된 그룹을 반환 — "새 그룹으로 이동"처럼 생성 직후 id가 필요할 때 */
     createGroup: (input: { spaceId: string; name: string }) => add.mutateAsync(input),

@@ -35,39 +35,39 @@ export function SpaceTabs() {
       </div>
 
       <button
-        className="shrink-0 rounded-full p-2 text-muted transition hover:bg-surface2 hover:text-text"
+        className="shrink-0 rounded-full p-2.5 text-muted transition hover:bg-surface2 hover:text-text"
         aria-label="메모"
         onClick={() => setView('memo')}
       >
-        <NotebookPen className="size-4" />
+        <NotebookPen className="size-5" />
       </button>
       <button
-        className="shrink-0 rounded-full p-2 text-muted transition hover:bg-surface2 hover:text-text"
+        className="shrink-0 rounded-full p-2.5 text-muted transition hover:bg-surface2 hover:text-text"
         aria-label="기록"
         onClick={() => setView('calendar')}
       >
-        <CalendarDays className="size-4" />
+        <CalendarDays className="size-5" />
       </button>
       <button
-        className="shrink-0 rounded-full p-2 text-muted transition hover:bg-surface2 hover:text-text"
+        className="shrink-0 rounded-full p-2.5 text-muted transition hover:bg-surface2 hover:text-text"
         aria-label="공간 관리"
         onClick={() => openManager()}
       >
-        <Settings2 className="size-4" />
+        <Settings2 className="size-5" />
       </button>
       <button
-        className="shrink-0 rounded-full p-2 text-muted transition hover:bg-surface2 hover:text-text"
+        className="shrink-0 rounded-full p-2.5 text-muted transition hover:bg-surface2 hover:text-text"
         aria-label="휴지통"
         onClick={() => setView('trash')}
       >
-        <Trash2 className="size-4" />
+        <Trash2 className="size-5" />
       </button>
       <button
-        className="shrink-0 rounded-full p-2 text-muted transition hover:bg-surface2 hover:text-text"
+        className="shrink-0 rounded-full p-2.5 text-muted transition hover:bg-surface2 hover:text-text"
         aria-label="설정"
         onClick={() => setView('settings')}
       >
-        <Settings className="size-4" />
+        <Settings className="size-5" />
       </button>
     </div>
   );

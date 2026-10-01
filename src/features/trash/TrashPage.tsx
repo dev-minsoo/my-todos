@@ -6,6 +6,7 @@ import { RotateCcw, Trash2 } from 'lucide-react';
 import { useUiStore } from '@/store/uiStore';
 import { cn } from '@/lib/utils';
 import { PageHeader } from '@/components/PageHeader';
+import { ErrorState } from '@/components/ErrorState';
 import { useTrash } from './useTrash';
 
 function deletedAgo(deletedAt: string | null): string {
@@ -24,6 +25,8 @@ export function TrashPage() {
     deletedSpaces,
     total,
     isLoading,
+    error,
+    refetch,
     restoreTask,
     purgeTask,
     restoreSpace,
@@ -37,7 +40,11 @@ export function TrashPage() {
       <div className="min-h-0 flex-1 overflow-y-auto px-4 py-6 md:px-8 md:py-8">
         <div className="mx-auto w-full max-w-xl">
           {isLoading && total === 0 ? (
-            <p className="py-10 text-center text-sm text-muted">불러오는 중…</p>
+            <p role="status" className="py-10 text-center text-sm text-muted">
+              불러오는 중…
+            </p>
+          ) : error && total === 0 ? (
+            <ErrorState compact onRetry={() => refetch()} />
           ) : total === 0 ? (
             <div className="flex flex-col items-center gap-1 py-16 text-center">
               <Trash2 className="size-9 text-muted" strokeWidth={1.5} />

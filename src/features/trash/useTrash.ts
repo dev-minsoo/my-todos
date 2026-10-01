@@ -127,6 +127,9 @@ export function useTrash(enabled = true) {
     deletedSpaces,
     total: deletedTasks.length + deletedSpaces.length,
     isLoading: tasksQuery.isLoading || spacesQuery.isLoading,
+    error: tasksQuery.error ?? spacesQuery.error,
+    /** 두 조회(할 일·공간)를 함께 다시 불러온다. ErrorState "다시 시도"용. */
+    refetch: () => Promise.all([tasksQuery.refetch(), spacesQuery.refetch()]),
     restoreTask: (id: string) => restoreTask.mutate(id),
     purgeTask: (id: string) => purgeTask.mutate(id),
     restoreSpace: (id: string) => restoreSpace.mutate(id),

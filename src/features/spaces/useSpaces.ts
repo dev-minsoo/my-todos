@@ -167,6 +167,7 @@ export function useSpaces() {
     spaces: query.data ?? [],
     isLoading: query.isLoading,
     error: query.error,
+    refetch: query.refetch,
     addSpace: (input: { name: string; color?: string }) => add.mutate(input),
     updateSpace: (input: { id: string; name?: string; color?: string }) => update.mutate(input),
     deleteSpace: (space: Space) => remove.mutate(space),

@@ -46,6 +46,7 @@ import type { GroupOption } from './GroupMovePopover';
 import type { TaskMoveProps } from './MoveTaskPopover';
 import { TaskItem, type RecurrenceProps, type TaskDetailProps } from './TaskItem';
 import { TaskDetailModal } from './TaskDetailModal';
+import { ErrorState } from '@/components/ErrorState';
 import { useTasks } from './useTasks';
 
 const byPosition = (a: Group, b: Group) =>
@@ -67,6 +68,8 @@ export function TaskList() {
     subtasksByParent,
     recurrenceSkips,
     isLoading,
+    error,
+    refetch,
     toggleTask,
     renameTask,
     deleteTask,
@@ -245,9 +248,14 @@ export function TaskList() {
       <div className="flex min-h-0 flex-1 flex-col overflow-y-auto py-2">
         {isToday && allDone && <AllDoneBanner total={count.total} />}
         {isLoading && isEmpty ? (
-          <div className="flex h-full min-h-40 items-center justify-center text-sm text-muted">
+          <div
+            role="status"
+            className="flex h-full min-h-40 items-center justify-center text-sm text-muted"
+          >
             불러오는 중…
           </div>
+        ) : error && isEmpty ? (
+          <ErrorState onRetry={() => refetch()} />
         ) : isAll ? (
           isEmpty ? (
             <EmptyState isToday={isToday} />
@@ -380,6 +388,7 @@ function AllDoneBanner({ total }: { total: number }) {
   return (
     <motion.div
       layout
+      role="status"
       initial={{ opacity: 0, y: -6 }}
       animate={{ opacity: 1, y: 0 }}
       className="mx-2 mb-1 mt-1 flex items-center gap-2.5 rounded-xl bg-accentSoft px-4 py-2.5"
@@ -780,6 +789,7 @@ function ReorderList({
   return (
     <Reorder.Group
       as="div"
+      role="presentation"
       axis="y"
       values={order}
       onReorder={setOrder}
@@ -825,7 +835,14 @@ function ReorderRow({
 } & SectionHandlers) {
   const controls = useDragControls();
   return (
-    <Reorder.Item as="div" value={task} dragListener={false} dragControls={controls} onDragEnd={onCommit}>
+    <Reorder.Item
+      as="div"
+      role="presentation"
+      value={task}
+      dragListener={false}
+      dragControls={controls}
+      onDragEnd={onCommit}
+    >
       <TaskItem
         task={task}
         onToggle={onToggle}
@@ -874,7 +891,9 @@ function Section({
           </span>
         )}
       </div>
-      <div className={cn('flex flex-col gap-0.5', tone === 'done' && 'opacity-70')}>{children}</div>
+      <div role="list" className={cn('flex flex-col gap-0.5', tone === 'done' && 'opacity-70')}>
+        {children}
+      </div>
     </section>
   );
 }
