@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import { CalendarDays, NotebookPen, Settings, Settings2, Trash2 } from 'lucide-react';
+import { CalendarDays, Clock, NotebookPen, Settings, Settings2, Trash2 } from 'lucide-react';
 import { ALL_TAB } from '@/db/types';
 import { useUiStore } from '@/store/uiStore';
 import { cn } from '@/lib/utils';
@@ -34,6 +34,13 @@ export function SpaceTabs() {
         ))}
       </div>
 
+      <button
+        className="shrink-0 rounded-full p-2.5 text-muted transition hover:bg-surface2 hover:text-text"
+        aria-label="나중에"
+        onClick={() => setView('someday')}
+      >
+        <Clock className="size-5" />
+      </button>
       <button
         className="shrink-0 rounded-full p-2.5 text-muted transition hover:bg-surface2 hover:text-text"
         aria-label="메모"

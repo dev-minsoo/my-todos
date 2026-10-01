@@ -11,8 +11,9 @@ import { PageHeader } from '@/components/PageHeader';
 import { ErrorState } from '@/components/ErrorState';
 import { cn } from '@/lib/utils';
 
-/** dueDate 'YYYY-MM-DD' → 'M월 d일' (파싱 실패 시 원문) */
-function dueLabel(dueDate: string): string {
+/** dueDate 'YYYY-MM-DD' → 'M월 d일' (null = 날짜 미정, 파싱 실패 시 원문) */
+function dueLabel(dueDate: string | null): string {
+  if (dueDate == null) return '날짜 미정';
   try {
     return format(parseISO(dueDate), 'M월 d일', { locale: ko });
   } catch {
@@ -34,11 +35,15 @@ export function SearchPage() {
 
   const trimmed = query.trim();
 
-  // 결과 클릭: 그 할 일의 날짜·공간으로 점프한 뒤 하루 화면으로 전환한다.
+  // 결과 클릭: 그 할 일의 공간으로 맞추고, 날짜가 있으면 그날 화면으로, 날짜 미정이면 '나중에'로 점프.
   function openTask(task: Task) {
-    setViewedDate(task.dueDate);
     setCurrentTab(task.spaceId);
-    setView('day');
+    if (task.dueDate == null) {
+      setView('someday');
+    } else {
+      setViewedDate(task.dueDate);
+      setView('day');
+    }
   }
 
   return (

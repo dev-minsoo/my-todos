@@ -110,16 +110,17 @@ function buildSummary(tasks: Task[], range: DateRange): ReportSummary {
 
     // 마감분(이행률·미수행·밀림)은 일반 할 일만. 습관은 E에서 따로 본다.
     // 취소한 할 일은 "미이행"이 아니므로 분모(dueTotal)에서 뺀다(완료도 미수행도 아닌 '닫힘').
+    // 날짜 미정(dueDate == null, '나중에')은 마감 자체가 없으므로 분모에서 자연 제외한다.
     const isHabit = t.recurrenceId != null;
-    if (!isHabit && t.cancelledAt == null && inRange(t.dueDate, range)) {
+    if (!isHabit && t.cancelledAt == null && t.dueDate != null && inRange(t.dueDate, range)) {
       dueTotal += 1;
       // 기간 종료까지 완료 = 완료일이 end 이전(반열림). early 완료도 이행으로 인정.
       if (doneDay != null && doneDay < range.end) {
         dueDone += 1;
       }
     }
-    // 밀림: 기간 내 완료한 일반 할 일 중 마감보다 늦게 끝낸 것.
-    if (!isHabit && doneDay != null && inRange(doneDay, range)) {
+    // 밀림: 기간 내 완료한 일반 할 일 중 마감보다 늦게 끝낸 것. 날짜 미정은 밀림 개념이 없다.
+    if (!isHabit && t.dueDate != null && doneDay != null && inRange(doneDay, range)) {
       const late = daysBetween(t.dueDate, doneDay);
       if (late > 0) lateDays.push(late);
     }
@@ -228,6 +229,7 @@ function buildHabits(
   const cancelledByRec = new Map<string, Set<string>>();
   for (const t of tasks) {
     if (t.recurrenceId == null) continue;
+    if (t.dueDate == null) continue; // 반복 출신은 항상 발생일(날짜)을 가진다 — 방어 가드
     if (t.completedAt != null) {
       let set = doneByRec.get(t.recurrenceId);
       if (!set) doneByRec.set(t.recurrenceId, (set = new Set()));

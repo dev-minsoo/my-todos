@@ -17,8 +17,9 @@ const taskSkipsKey = (userId: string) => ['taskSkips', userId] as const;
 
 const msg = (e: unknown, fallback: string) => (e instanceof Error ? e.message : fallback);
 
-/** 이동 토스트용 날짜 라벨. 오늘/내일/어제는 상대어로, 그 밖은 'M월 d일'. */
-function moveDateLabel(dateStr: string): string {
+/** 이동 토스트용 날짜 라벨. 날짜 미정(null)/오늘/내일/어제는 상대어로, 그 밖은 'M월 d일'. */
+function moveDateLabel(dateStr: string | null): string {
+  if (dateStr == null) return '날짜 미정';
   const today = todayStr();
   if (dateStr === today) return '오늘';
   if (dateStr === addDaysStr(today, 1)) return '내일';
@@ -52,7 +53,7 @@ async function fetchSkipMarkers(): Promise<Task[]> {
 
 export type AddTaskInput = {
   title: string;
-  dueDate: string;
+  dueDate: string | null; // null = 날짜 미정('나중에')
   spaceId: string;
   groupId?: string | null;
 };
@@ -253,7 +254,7 @@ export function useTasks() {
   const moveDate = useMutation<
     void,
     unknown,
-    { id: string; dueDate: string; prevDate: string; showUndo: boolean },
+    { id: string; dueDate: string | null; prevDate: string | null; showUndo: boolean },
     Ctx
   >({
     mutationFn: async ({ id, dueDate }) => {
@@ -631,9 +632,9 @@ export function useTasks() {
     // 취소 해제(복구) — 다시 "할 일"로. 상세 모달의 '복구' 버튼에서 쓴다.
     uncancelTask: (task: Task) => uncancel.mutate(task),
     moveTaskToGroup: (id: string, groupId: string | null) => move.mutate({ id, groupId }),
-    /** 다른 날로 이동(명시적) — due_date를 바꾸고 되돌리기 토스트를 띄운다. */
-    moveTaskToDate: (task: Task, dueDate: string) => {
-      if (dueDate === task.dueDate) return;
+    /** 다른 날로/날짜 미정으로 이동(명시적) — due_date를 바꾸고 되돌리기 토스트를 띄운다. */
+    moveTaskToDate: (task: Task, dueDate: string | null) => {
+      if (dueDate === task.dueDate) return; // null===null 포함 no-op
       moveDate.mutate({ id: task.id, dueDate, prevDate: task.dueDate, showUndo: true });
     },
     /** 다른 공간으로 이동 — space_id 변경 + 그룹 초기화. 같은 공간이면 no-op(그룹 보존). */

@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from 'react';
-import { CalendarClock, CalendarDays, Check, ChevronDown } from 'lucide-react';
+import { CalendarCheck, CalendarClock, CalendarDays, CalendarOff, Check, ChevronDown } from 'lucide-react';
 import type { Group, Task } from '@/db/types';
 import { NO_GROUP_NAME } from '@/domain/sections';
 import { addDaysStr } from '@/domain/dayBoundary';
@@ -14,9 +14,10 @@ export type TaskMoveProps = {
   spaces: SpaceOption[];
   /** 전 공간의 살아있는 그룹들 — 팝오버가 task.spaceId로 걸러 쓴다 */
   groups: Group[];
-  /** '내일로'의 기준이 되는 오늘 날짜('YYYY-MM-DD') */
+  /** '오늘로'·'내일로'의 기준이 되는 오늘 날짜('YYYY-MM-DD') */
   today: string;
-  onMoveToDate: (task: Task, dueDate: string) => void;
+  /** 다른 날로/날짜 미정으로(null = '나중에') 이동 */
+  onMoveToDate: (task: Task, dueDate: string | null) => void;
   onMoveToSpace: (task: Task, spaceId: string, spaceName: string) => void;
   onMoveToGroup: (taskId: string, groupId: string | null) => void;
 };
@@ -75,6 +76,19 @@ export function MoveTaskPopover({
         <>
           {/* 날짜 */}
           <p className={SECTION_LABEL}>날짜</p>
+          {task.dueDate !== today && (
+            <button
+              role="menuitem"
+              onClick={() => {
+                onMoveToDate(task, today);
+                close();
+              }}
+              className={MENU_ITEM}
+            >
+              <CalendarCheck className="size-4 shrink-0 text-muted" />
+              <span>오늘로</span>
+            </button>
+          )}
           <button
             role="menuitem"
             onClick={() => {
@@ -100,12 +114,26 @@ export function MoveTaskPopover({
           </button>
           {showCal && (
             <MiniCalendar
-              selectedDate={task.dueDate}
+              selectedDate={task.dueDate ?? today}
               onPick={(day) => {
                 onMoveToDate(task, day);
                 close();
               }}
             />
+          )}
+          {/* 날짜 미정으로 되돌리기('나중에'). 이미 날짜 미정이면 숨긴다. */}
+          {task.dueDate != null && (
+            <button
+              role="menuitem"
+              onClick={() => {
+                onMoveToDate(task, null);
+                close();
+              }}
+              className={MENU_ITEM}
+            >
+              <CalendarOff className="size-4 shrink-0 text-muted" />
+              <span>날짜 미정으로</span>
+            </button>
           )}
 
           {/* 공간 */}

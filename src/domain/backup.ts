@@ -98,7 +98,7 @@ export type TaskInsert = {
   space_id: string;
   group_id: string | null;
   title: string;
-  due_date: string;
+  due_date: string | null; // null = 날짜 미정('나중에')
   completed_at: string | null;
   cancelled_at: string | null;
   position: string;
@@ -291,7 +291,7 @@ function normalizeTask(raw: unknown): Task {
     spaceId: reqStr(r, 'spaceId'),
     groupId: nullableStr(r, 'groupId'),
     title: reqStr(r, 'title'),
-    dueDate: reqStr(r, 'dueDate'),
+    dueDate: nullableStr(r, 'dueDate'), // null = 날짜 미정('나중에')
     completedAt: nullableStr(r, 'completedAt'),
     cancelledAt: nullableStr(r, 'cancelledAt'), // 옛 백업(필드 없음)은 null 폴백
     position: optStr(r, 'position'),

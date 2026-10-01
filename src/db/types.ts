@@ -7,7 +7,7 @@ export type Task = {
   spaceId: string;
   groupId: string | null; // 속한 그룹, null = 그룹 없음
   title: string;
-  dueDate: string; // 'YYYY-MM-DD'
+  dueDate: string | null; // 'YYYY-MM-DD', null = 날짜 미정('나중에')
   completedAt: string | null; // ISO, null = 할 일
   cancelledAt: string | null; // ISO, null = 취소 아님 (completedAt과 대칭·상호배타인 두 번째 '닫힘' 상태)
   position: string; // fractional index (v0.1: created_at 순)

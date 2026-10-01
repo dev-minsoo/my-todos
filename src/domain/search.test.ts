@@ -100,6 +100,19 @@ describe('searchTasks', () => {
     expect(searchTasks(tasks, '회의').map((t) => t.title)).toEqual(['회의 B', '회의 A']);
   });
 
+  it('날짜 미정(dueDate null)은 내림차순에서 맨 뒤로 정렬한다', () => {
+    const tasks = [
+      makeTask({ title: '회의 미정', dueDate: null }),
+      makeTask({ title: '회의 늦음', dueDate: '2026-09-30' }),
+      makeTask({ title: '회의 이름', dueDate: '2026-09-01' }),
+    ];
+    expect(searchTasks(tasks, '회의').map((t) => t.title)).toEqual([
+      '회의 늦음',
+      '회의 이름',
+      '회의 미정',
+    ]);
+  });
+
   it('완료된 항목도 검색된다 (completedAt 무관)', () => {
     const tasks = [
       makeTask({ title: '보고서', completedAt: '2026-09-28T10:00:00' }),

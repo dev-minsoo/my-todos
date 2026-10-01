@@ -136,6 +136,44 @@ describe('deriveSections 취소(두 번째 닫힘 상태, 완료와 대칭)', ()
   });
 });
 
+describe("deriveSections 날짜 미정('나중에' = dueDate null)", () => {
+  it('열린 날짜 미정 항목은 어느 섹션에도 안 뜬다 (전용 페이지가 담당)', () => {
+    // 날짜가 없으니 open(오늘)에도, carried(지난 날)에도 걸리지 않는다 — '나중에' 페이지 소관.
+    const s = deriveSections([makeTask({ dueDate: null })], TODAY, TODAY);
+    expect(s.open).toHaveLength(0);
+    expect(s.carried).toHaveLength(0);
+    expect(s.completed).toHaveLength(0);
+    expect(s.cancelled).toHaveLength(0);
+    expect(hasAnyItems(s)).toBe(false);
+  });
+
+  it('날짜 미정은 넘어오지 않는다 (null은 dueDate < today가 아님)', () => {
+    const tasks = [
+      makeTask({ dueDate: null }), // 날짜 미정 → 영원히 안 넘어옴
+      makeTask({ dueDate: '2026-09-26' }), // 일반 과거 미완료 → 넘어옴
+    ];
+    const s = deriveSections(tasks, TODAY, TODAY);
+    expect(s.carried).toHaveLength(1);
+    expect(s.carried[0].dueDate).toBe('2026-09-26');
+  });
+
+  it('완료한 날짜 미정 항목은 완료일의 완료 섹션에 귀속된다 (크래시 없음)', () => {
+    const tasks = [makeTask({ dueDate: null, completedAt: '2026-09-28T10:00:00' })];
+    const s = deriveSections(tasks, TODAY, TODAY);
+    expect(s.completed).toHaveLength(1);
+    expect(s.open).toHaveLength(0);
+    expect(s.carried).toHaveLength(0);
+  });
+
+  it('취소한 날짜 미정 항목은 취소일의 취소 섹션에 귀속된다 (크래시 없음)', () => {
+    const tasks = [makeTask({ dueDate: null, cancelledAt: '2026-09-28T11:00:00' })];
+    const s = deriveSections(tasks, TODAY, TODAY);
+    expect(s.cancelled).toHaveLength(1);
+    expect(s.open).toHaveLength(0);
+    expect(s.carried).toHaveLength(0);
+  });
+});
+
 describe('deriveSections 반복 가드 (습관형: 안 넘어옴)', () => {
   it('반복 출신(recurrenceId 있음)의 과거 미완료 행은 carried에 안 잡힌다', () => {
     const tasks = [

@@ -168,6 +168,13 @@ describe('parseBackup', () => {
     const data = parseBackup(raw);
     expect(data.tasks[0].cancelledAt).toBeNull();
   });
+
+  it("due_date가 null인(날짜 미정 '나중에') 할 일을 파싱해 보존한다", () => {
+    const raw = validFile();
+    (raw.data.tasks[0] as Record<string, unknown>).dueDate = null;
+    const data = parseBackup(raw);
+    expect(data.tasks[0].dueDate).toBeNull();
+  });
 });
 
 describe('remapForImport', () => {
@@ -261,6 +268,17 @@ describe('remapForImport', () => {
     };
     const out = remapForImport(data, counter(), userId);
     expect(out.tasks[0].cancelled_at).toBe('2026-09-28T11:00:00.000Z');
+  });
+
+  it("due_date가 null인(날짜 미정 '나중에') 할 일을 보존한다 (라운드트립)", () => {
+    const data: BackupData = {
+      spaces: [space({ id: 's1' })],
+      groups: [],
+      recurrences: [],
+      tasks: [task({ id: 't1', spaceId: 's1', dueDate: null })],
+    };
+    const out = remapForImport(data, counter(), userId);
+    expect(out.tasks[0].due_date).toBeNull();
   });
 
   it('서브태스크의 parent_id를 부모의 새 id로 다시 잇고 memo를 보존한다', () => {

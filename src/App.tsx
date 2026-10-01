@@ -10,6 +10,7 @@ import { TrashPage } from '@/features/trash/TrashPage';
 import { CalendarPage } from '@/features/calendar/CalendarPage';
 import { SearchPage } from '@/features/search/SearchPage';
 import { MemoPage } from '@/features/memo/MemoPage';
+import { SomedayPage } from '@/features/someday/SomedayPage';
 import { DayHeader } from '@/features/day/DayHeader';
 import { TaskList } from '@/features/tasks/TaskList';
 import { TaskInput } from '@/features/tasks/TaskInput';
@@ -63,6 +64,8 @@ export default function App() {
                       <SearchPage />
                     ) : activeView === 'memo' ? (
                       <MemoPage />
+                    ) : activeView === 'someday' ? (
+                      <SomedayPage />
                     ) : activeView === 'report' ? (
                       <Suspense
                         fallback={<p className="p-8 text-center text-sm text-muted">불러오는 중…</p>}

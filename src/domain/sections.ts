@@ -73,10 +73,11 @@ export function deriveSections(tasks: Task[], viewedDate: string, today: string)
           (t) =>
             t.completedAt == null &&
             t.cancelledAt == null &&
+            t.dueDate != null && // 날짜 미정('나중에')은 넘어오지 않는다 — 영원히 carried 제외
             t.dueDate < today &&
             t.recurrenceId == null
         )
-        .map((t) => ({ ...t, overdueDays: daysBetween(t.dueDate, today) }))
+        .map((t) => ({ ...t, overdueDays: daysBetween(t.dueDate as string, today) }))
         .sort(byPosition)
     : [];
 

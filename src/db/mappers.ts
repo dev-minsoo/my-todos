@@ -9,7 +9,7 @@ export type TaskRow = {
   space_id: string;
   group_id: string | null;
   title: string;
-  due_date: string;
+  due_date: string | null; // null = 날짜 미정('나중에')
   completed_at: string | null;
   cancelled_at: string | null;
   position: string;

@@ -1,6 +1,6 @@
 import { format, parseISO } from 'date-fns';
 import { ko } from 'date-fns/locale';
-import { Ban, CalendarDays, CheckCircle2, Circle, Repeat, RotateCcw } from 'lucide-react';
+import { Ban, CalendarDays, CalendarOff, CheckCircle2, Circle, Repeat, RotateCcw } from 'lucide-react';
 import type { Group, Space, Task } from '@/db/types';
 import { daysBetween, todayStr } from '@/domain/dayBoundary';
 import { isVirtualOccurrence } from '@/domain/recurrence';
@@ -79,8 +79,11 @@ function Body({
   const group = task.groupId ? groups.find((g) => g.id === task.groupId) ?? null : null;
   const subtasks = subtasksByParent.get(task.id) ?? [];
   const subDone = subtasks.filter((s) => s.completedAt != null).length;
-  // 넘어옴(며칠 지남)은 행 배지와 같은 기준: 오늘까지 밀린 달력 일수(미완료·미취소일 때만).
-  const overdue = done || cancelled ? 0 : Math.max(0, daysBetween(task.dueDate, todayStr()));
+  // 날짜 미정('나중에')이면 날짜/넘어옴 개념이 없다 — 날짜 줄은 "날짜 미정"으로 표시한다.
+  const dated = task.dueDate != null;
+  // 넘어옴(며칠 지남)은 행 배지와 같은 기준: 오늘까지 밀린 달력 일수(날짜 있고 미완료·미취소일 때만).
+  const overdue =
+    dated && !done && !cancelled ? Math.max(0, daysBetween(task.dueDate as string, todayStr())) : 0;
 
   return (
     <div className="space-y-4 text-sm">
@@ -107,11 +110,11 @@ function Body({
         ) : null}
       </div>
 
-      {/* 날짜 + 넘어옴 */}
+      {/* 날짜 + 넘어옴 (날짜 미정이면 "날짜 미정") */}
       <div className="flex flex-wrap items-center gap-2">
         <span className="inline-flex items-center gap-1.5 text-muted">
-          <CalendarDays className="size-4" />
-          {fmtDay(task.dueDate)}
+          {dated ? <CalendarDays className="size-4" /> : <CalendarOff className="size-4" />}
+          {dated ? fmtDay(task.dueDate as string) : '날짜 미정'}
         </span>
         {overdue > 0 && (
           <span className="rounded-full bg-overdueBg px-2 py-0.5 text-[11px] font-medium text-overdueFg">

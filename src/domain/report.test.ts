@@ -159,6 +159,23 @@ describe('buildReport summary', () => {
     expect(s.dueDone).toBe(0);
     expect(s.missed).toBe(1); // 취소는 미수행에 안 들어간다
   });
+
+  it("완료한 날짜 미정('나중에') 할 일은 완료수엔 들지만 마감분·밀림에서 빠진다", () => {
+    // dueDate가 없으니 이행률 분모·밀림(크래시 없이)에서 자연 제외, 완료일 기준으로만 집계.
+    const tasks = [
+      task({
+        id: 'nd',
+        dueDate: null,
+        completedAt: '2026-09-20T09:00:00.000Z',
+        createdAt: '2026-09-18T08:00:00.000Z',
+      }),
+    ];
+    const s = run({ tasks }).summary;
+    expect(s.completed).toBe(1); // 완료수엔 포함
+    expect(s.dueTotal).toBe(0); // 마감이 없으니 이행률 분모 밖
+    expect(s.missed).toBe(0);
+    expect(s.avgLateDays).toBe(0); // 날짜 없으니 밀림 계산 안 함(NaN/크래시 없음)
+  });
 });
 
 describe('buildReport activity', () => {

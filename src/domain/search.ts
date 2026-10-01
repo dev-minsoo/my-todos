@@ -23,8 +23,13 @@ export function searchTasks(tasks: Task[], query: string): Task[] {
     .sort(byDueDateDesc);
 }
 
-/** dueDate 내림차순 → 같으면 createdAt 내림차순 (둘 다 정렬 가능한 문자열) */
+/**
+ * dueDate 내림차순 → 같으면 createdAt 내림차순 (둘 다 정렬 가능한 문자열).
+ * 날짜 미정(null)은 ''로 보정해 맨 뒤로 보낸다(내림차순에서 가장 작은 값).
+ */
 function byDueDateDesc(a: Task, b: Task): number {
-  if (a.dueDate !== b.dueDate) return a.dueDate < b.dueDate ? 1 : -1;
+  const ad = a.dueDate ?? '';
+  const bd = b.dueDate ?? '';
+  if (ad !== bd) return ad < bd ? 1 : -1;
   return a.createdAt < b.createdAt ? 1 : a.createdAt > b.createdAt ? -1 : 0;
 }
