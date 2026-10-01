@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { format, parseISO } from 'date-fns';
 import { ko } from 'date-fns/locale';
-import { Check, Search, X } from 'lucide-react';
+import { Ban, Check, Search, X } from 'lucide-react';
 import type { Task } from '@/db/types';
 import { useUiStore } from '@/store/uiStore';
 import { useTasks } from '@/features/tasks/useTasks';
@@ -122,14 +122,19 @@ function ResultRow({
   onOpen: () => void;
 }) {
   const done = task.completedAt != null;
+  const cancelled = task.cancelledAt != null;
   return (
     <li>
       <button
         onClick={onOpen}
         className="flex w-full items-center gap-2.5 rounded-xl border border-border bg-surface px-3 py-2.5 text-left transition hover:bg-surface2"
       >
-        {/* 완료 여부 표시 (읽기 전용) */}
-        {done ? (
+        {/* 상태 표시 (읽기 전용): 취소 / 완료 / 할 일 */}
+        {cancelled ? (
+          <span className="grid size-5 shrink-0 place-items-center rounded-full bg-surface2 text-muted">
+            <Ban className="size-3.5" />
+          </span>
+        ) : done ? (
           <span className="grid size-5 shrink-0 place-items-center rounded-full bg-accent/15 text-accent">
             <Check className="size-3.5" strokeWidth={3} />
           </span>
@@ -137,7 +142,12 @@ function ResultRow({
           <span className="size-5 shrink-0 rounded-full border-2 border-border" aria-hidden />
         )}
 
-        <span className={cn('min-w-0 flex-1 truncate text-sm', done && 'text-muted line-through')}>
+        <span
+          className={cn(
+            'min-w-0 flex-1 truncate text-sm',
+            (done || cancelled) && 'text-muted line-through'
+          )}
+        >
           {task.title}
         </span>
 

@@ -76,7 +76,17 @@ export function TrashPage() {
                       onRestore={() => restoreTask(t.id)}
                       onPurge={() => purgeTask(t.id)}
                     >
-                      <span className={cn('truncate', t.completedAt && 'text-muted line-through')}>
+                      {t.cancelledAt && (
+                        <span className="shrink-0 rounded bg-surface2 px-1.5 py-0.5 text-[10px] font-medium text-muted">
+                          취소
+                        </span>
+                      )}
+                      <span
+                        className={cn(
+                          'truncate',
+                          (t.completedAt || t.cancelledAt) && 'text-muted line-through'
+                        )}
+                      >
                         {t.title}
                       </span>
                     </TrashRow>
