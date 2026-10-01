@@ -32,12 +32,8 @@ type UiState = {
   spacesManagerOpen: boolean;
   /** 모달을 열 때 '새 공간 추가' 폼을 펼친 채로 시작할지 (추가 버튼으로 열면 true) */
   spacesManagerAddOpen: boolean;
-  /** 키보드 항목 커서가 가리키는 할 일 id (세션 한정 — j/k로 이동, Esc로 해제) */
-  selectedTaskId: string | null;
-  /** 인라인 수정 중인 할 일 id (세션 한정 — e키/우측 Edit 버튼으로 진입) */
+  /** 인라인 수정 중인 할 일 id (세션 한정 — 우측 연필 버튼으로 진입) */
   editingTaskId: string | null;
-  /** 추가 입력칸 포커스 요청 신호 (n키). 값이 바뀔 때마다 TaskInput이 포커스한다. */
-  focusInputNonce: number;
   /** 상세 정보 모달을 연 할 일 id (세션 한정 — 항목 제목 클릭으로 열림, 읽기 전용) */
   detailTaskId: string | null;
 
@@ -54,9 +50,7 @@ type UiState = {
   setView: (v: AppView) => void;
   openSpacesManager: (options?: { add?: boolean }) => void;
   closeSpacesManager: () => void;
-  setSelectedTaskId: (id: string | null) => void;
   setEditingTaskId: (id: string | null) => void;
-  requestFocusInput: () => void;
   setDetailTaskId: (id: string | null) => void;
   /** 주어진 공간·그룹을 접힘 목록에 합친다 (헤더 "전체 접기" — 현재 뷰의 섹션만 넘긴다) */
   collapseAll: (spaceIds: string[], groupIds: string[]) => void;
@@ -78,9 +72,7 @@ export const useUiStore = create<UiState>()(
       activeView: 'day',
       spacesManagerOpen: false,
       spacesManagerAddOpen: false,
-      selectedTaskId: null,
       editingTaskId: null,
-      focusInputNonce: 0,
       detailTaskId: null,
 
       setCurrentTab: (t) => set({ currentTab: t }),
@@ -108,9 +100,7 @@ export const useUiStore = create<UiState>()(
       openSpacesManager: (options) =>
         set({ spacesManagerOpen: true, spacesManagerAddOpen: !!options?.add }),
       closeSpacesManager: () => set({ spacesManagerOpen: false }),
-      setSelectedTaskId: (id) => set({ selectedTaskId: id }),
       setEditingTaskId: (id) => set({ editingTaskId: id }),
-      requestFocusInput: () => set((s) => ({ focusInputNonce: s.focusInputNonce + 1 })),
       setDetailTaskId: (id) => set({ detailTaskId: id }),
       collapseAll: (spaceIds, groupIds) =>
         set((s) => ({
