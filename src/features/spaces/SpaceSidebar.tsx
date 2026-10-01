@@ -4,6 +4,7 @@ import {
   CalendarDays,
   Check,
   Layers,
+  NotebookPen,
   PanelLeftClose,
   PanelLeftOpen,
   Plus,
@@ -130,6 +131,9 @@ export function SpaceSidebar() {
             <RailButton label="검색" active={activeView === 'search'} onClick={() => setView('search')}>
               <Search className="size-4" />
             </RailButton>
+            <RailButton label="메모" active={activeView === 'memo'} onClick={() => setView('memo')}>
+              <NotebookPen className="size-4" />
+            </RailButton>
             <RailButton label="기록" active={activeView === 'calendar'} onClick={() => setView('calendar')}>
               <CalendarDays className="size-4" />
             </RailButton>
@@ -148,6 +152,10 @@ export function SpaceSidebar() {
             <NavItem active={activeView === 'search'} onClick={() => setView('search')}>
               <Search className="size-4 shrink-0 text-muted" />
               <span>검색</span>
+            </NavItem>
+            <NavItem active={activeView === 'memo'} onClick={() => setView('memo')}>
+              <NotebookPen className="size-4 shrink-0 text-muted" />
+              <span>메모</span>
             </NavItem>
             <NavItem active={activeView === 'calendar'} onClick={() => setView('calendar')}>
               <CalendarDays className="size-4 shrink-0 text-muted" />

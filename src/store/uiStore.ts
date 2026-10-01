@@ -6,8 +6,8 @@ import { addDaysStr, todayStr } from '@/domain/dayBoundary';
 /** 테마 선택: 시스템 따름 / 라이트 강제 / 다크 강제 */
 export type Theme = 'system' | 'light' | 'dark';
 
-/** 본문에 표시할 화면 (하루 / 기록 달력 / 검색 / 설정 / 휴지통) */
-export type AppView = 'day' | 'calendar' | 'search' | 'report' | 'settings' | 'trash';
+/** 본문에 표시할 화면 (하루 / 기록 달력 / 검색 / 메모 / 리포트 / 설정 / 휴지통) */
+export type AppView = 'day' | 'calendar' | 'search' | 'memo' | 'report' | 'settings' | 'trash';
 
 type UiState = {
   /** 현재 탭 (전체 또는 공간 id) */
