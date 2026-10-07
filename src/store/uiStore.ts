@@ -44,6 +44,12 @@ type UiState = {
   editingTaskId: string | null;
   /** 상세 정보 모달을 연 할 일 id (세션 한정 — 항목 제목 클릭으로 열림, 읽기 전용) */
   detailTaskId: string | null;
+  /** 아침 정리 자동 띄우기 on/off (기본 켬 — persist) */
+  morningTriageEnabled: boolean;
+  /** 아침 정리를 '오늘' 처리한 날짜 'YYYY-MM-DD' (persist) — todayStr()와 다르면 그날 다시 자동으로 뜬다 */
+  morningTriageHandledDate: string | null;
+  /** 아침 정리 시트 열림 여부 (세션 한정 — 저장 안 함) */
+  morningTriageOpen: boolean;
 
   setCurrentTab: (t: TabId) => void;
   setViewedDate: (d: string) => void;
@@ -60,6 +66,11 @@ type UiState = {
   closeSpacesManager: () => void;
   setEditingTaskId: (id: string | null) => void;
   setDetailTaskId: (id: string | null) => void;
+  setMorningTriageEnabled: (v: boolean) => void;
+  /** 아침 정리 시트를 연다 (자동 열기 effect에서 호출) */
+  openMorningTriage: () => void;
+  /** 아침 정리를 닫고 '오늘 처리함'으로 찍는다 — 어떻게 닫든(X·백드롭·Escape·"나중에 하기"·다 정리) 그날 다시 안 뜬다 */
+  dismissMorningTriage: () => void;
   /** 주어진 공간·그룹을 접힘 목록에 합친다 (헤더 "전체 접기" — 현재 뷰의 섹션만 넘긴다) */
   collapseAll: (spaceIds: string[], groupIds: string[]) => void;
   /** 주어진 공간·그룹을 접힘 목록에서 뺀다 (헤더 "전체 펼치기") */
@@ -82,6 +93,9 @@ export const useUiStore = create<UiState>()(
       spacesManagerAddOpen: false,
       editingTaskId: null,
       detailTaskId: null,
+      morningTriageEnabled: true,
+      morningTriageHandledDate: null,
+      morningTriageOpen: false,
 
       setCurrentTab: (t) => set({ currentTab: t }),
       setViewedDate: (d) => set({ viewedDate: d }),
@@ -110,6 +124,10 @@ export const useUiStore = create<UiState>()(
       closeSpacesManager: () => set({ spacesManagerOpen: false }),
       setEditingTaskId: (id) => set({ editingTaskId: id }),
       setDetailTaskId: (id) => set({ detailTaskId: id }),
+      setMorningTriageEnabled: (v) => set({ morningTriageEnabled: v }),
+      openMorningTriage: () => set({ morningTriageOpen: true }),
+      dismissMorningTriage: () =>
+        set({ morningTriageOpen: false, morningTriageHandledDate: todayStr() }),
       collapseAll: (spaceIds, groupIds) =>
         set((s) => ({
           collapsedSpaces: Array.from(new Set([...s.collapsedSpaces, ...spaceIds])),
@@ -132,6 +150,8 @@ export const useUiStore = create<UiState>()(
         collapsedSpaces: s.collapsedSpaces,
         theme: s.theme,
         sidebarCollapsed: s.sidebarCollapsed,
+        morningTriageEnabled: s.morningTriageEnabled,
+        morningTriageHandledDate: s.morningTriageHandledDate,
       }),
     }
   )

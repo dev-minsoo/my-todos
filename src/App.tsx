@@ -14,6 +14,7 @@ import { SomedayPage } from '@/features/someday/SomedayPage';
 import { DayHeader } from '@/features/day/DayHeader';
 import { TaskList } from '@/features/tasks/TaskList';
 import { TaskInput } from '@/features/tasks/TaskInput';
+import { MorningTriage } from '@/features/triage/MorningTriage';
 import { LocalBanner } from '@/components/LocalBanner';
 import { useUiStore } from '@/store/uiStore';
 
@@ -86,6 +87,8 @@ export default function App() {
 
                 {/* 데스크톱·모바일 공용 모달 (사이드바/상단 탭에서 연다) */}
                 <SpacesManagerModal />
+                {/* 아침 정리 — 넘어온 일이 있으면 하루 한 번 자동으로 뜨는 오버레이(상시 마운트) */}
+                <MorningTriage />
               </div>
             </MotionConfig>
           </AuthGate>
