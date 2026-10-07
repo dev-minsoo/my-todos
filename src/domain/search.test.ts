@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import type { Task } from '@/db/types';
-import { searchTasks } from './search';
+import { searchTasks, taskStatus } from './search';
 
 let seq = 0;
 function makeTask(partial: Partial<Task>): Task {
@@ -129,5 +129,106 @@ describe('searchTasks', () => {
     const before = tasks.map((t) => t.id);
     searchTasks(tasks, '회의');
     expect(tasks.map((t) => t.id)).toEqual(before);
+  });
+
+  describe('filters', () => {
+    it('status: open — 미완만 거른다', () => {
+      const tasks = [
+        makeTask({ title: '회의 미완' }),
+        makeTask({ title: '회의 완료', completedAt: '2026-09-28T10:00:00' }),
+        makeTask({ title: '회의 취소', cancelledAt: '2026-09-28T10:00:00' }),
+      ];
+      const r = searchTasks(tasks, '회의', { status: 'open' });
+      expect(r.map((t) => t.title)).toEqual(['회의 미완']);
+    });
+
+    it('status: done — 완료만 거른다', () => {
+      const tasks = [
+        makeTask({ title: '회의 미완' }),
+        makeTask({ title: '회의 완료', completedAt: '2026-09-28T10:00:00' }),
+        makeTask({ title: '회의 취소', cancelledAt: '2026-09-28T10:00:00' }),
+      ];
+      const r = searchTasks(tasks, '회의', { status: 'done' });
+      expect(r.map((t) => t.title)).toEqual(['회의 완료']);
+    });
+
+    it('status: cancelled — 취소만 거른다', () => {
+      const tasks = [
+        makeTask({ title: '회의 미완' }),
+        makeTask({ title: '회의 완료', completedAt: '2026-09-28T10:00:00' }),
+        makeTask({ title: '회의 취소', cancelledAt: '2026-09-28T10:00:00' }),
+      ];
+      const r = searchTasks(tasks, '회의', { status: 'cancelled' });
+      expect(r.map((t) => t.title)).toEqual(['회의 취소']);
+    });
+
+    it('spaceIds — 지정한 공간만 거른다', () => {
+      const tasks = [
+        makeTask({ title: '회의 개인', spaceId: 's-home' }),
+        makeTask({ title: '회의 회사', spaceId: 's-work' }),
+      ];
+      const r = searchTasks(tasks, '회의', { spaceIds: new Set(['s-work']) });
+      expect(r.map((t) => t.title)).toEqual(['회의 회사']);
+    });
+
+    it('빈 spaceIds Set은 공간으로 거르지 않는다 (= 전체)', () => {
+      const tasks = [
+        makeTask({ title: '회의 개인', spaceId: 's-home' }),
+        makeTask({ title: '회의 회사', spaceId: 's-work' }),
+      ];
+      expect(searchTasks(tasks, '회의', { spaceIds: new Set() })).toHaveLength(2);
+    });
+
+    it('range — 반열림 [start, end) 경계로 거르고, 날짜 미정은 제외한다', () => {
+      const tasks = [
+        makeTask({ title: '회의 전날', dueDate: '2026-08-31' }), // start 직전 → 제외
+        makeTask({ title: '회의 시작일', dueDate: '2026-09-01' }), // 포함
+        makeTask({ title: '회의 마지막날', dueDate: '2026-09-30' }), // 포함
+        makeTask({ title: '회의 끝경계', dueDate: '2026-10-01' }), // end(제외)
+        makeTask({ title: '회의 미정', dueDate: null }), // 날짜 미정 → 제외
+      ];
+      const r = searchTasks(tasks, '회의', {
+        range: { start: '2026-09-01', end: '2026-10-01' },
+      });
+      expect(r.map((t) => t.title)).toEqual(['회의 마지막날', '회의 시작일']);
+    });
+
+    it('복합 — 쿼리 + 상태 + 공간을 모두 AND로 좁힌다', () => {
+      const tasks = [
+        makeTask({ title: '보고서 초안', spaceId: 's-work' }),
+        makeTask({ title: '보고서 제출', spaceId: 's-work', completedAt: '2026-09-28T10:00:00' }),
+        makeTask({ title: '보고서 개인', spaceId: 's-home', completedAt: '2026-09-28T10:00:00' }),
+      ];
+      const r = searchTasks(tasks, '보고서', {
+        status: 'done',
+        spaceIds: new Set(['s-work']),
+      });
+      expect(r.map((t) => t.title)).toEqual(['보고서 제출']);
+    });
+
+    it('filters 미전달·전 필드 null이면 기존 결과와 같다 (회귀)', () => {
+      const tasks = [
+        makeTask({ title: '회의 1', dueDate: '2026-09-01' }),
+        makeTask({ title: '회의 2', dueDate: '2026-09-30' }),
+      ];
+      const base = searchTasks(tasks, '회의').map((t) => t.title);
+      expect(searchTasks(tasks, '회의', {}).map((t) => t.title)).toEqual(base);
+      expect(
+        searchTasks(tasks, '회의', { status: null, spaceIds: null, range: null }).map((t) => t.title)
+      ).toEqual(base);
+    });
+
+    it('빈 쿼리는 필터가 있어도 빈 결과', () => {
+      const tasks = [makeTask({ title: '회의', spaceId: 's-work' })];
+      expect(searchTasks(tasks, '', { status: 'open', spaceIds: new Set(['s-work']) })).toEqual([]);
+    });
+  });
+
+  describe('taskStatus', () => {
+    it('완료·취소 유무로 상태를 판정한다 (취소 우선)', () => {
+      expect(taskStatus(makeTask({}))).toBe('open');
+      expect(taskStatus(makeTask({ completedAt: '2026-09-28T10:00:00' }))).toBe('done');
+      expect(taskStatus(makeTask({ cancelledAt: '2026-09-28T10:00:00' }))).toBe('cancelled');
+    });
   });
 });
