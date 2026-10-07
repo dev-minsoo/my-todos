@@ -7,6 +7,9 @@ import {
   type ReactNode,
 } from 'react';
 import { AnimatePresence, motion, Reorder, useDragControls } from 'framer-motion';
+import { format, parseISO } from 'date-fns';
+import { ko } from 'date-fns/locale';
+import { toast } from 'sonner';
 import {
   ArrowDown,
   ArrowUp,
@@ -17,6 +20,7 @@ import {
   ChevronRight,
   ChevronsDownUp,
   ChevronsUpDown,
+  Copy,
   CornerDownRight,
   Feather,
   Trash2,
@@ -25,6 +29,7 @@ import {
 import { ALL_TAB, type Group } from '@/db/types';
 import { useUiStore } from '@/store/uiStore';
 import { todayStr } from '@/domain/dayBoundary';
+import { formatDaySummary, type SummaryBlock } from '@/domain/summary';
 import { positionBetween } from '@/domain/order';
 import {
   completionCount,
@@ -32,6 +37,7 @@ import {
   groupSectionsBySpace,
   groupSectionsByGroup,
   hasAnyItems,
+  NUDGE_OVERDUE_DAYS,
 } from '@/domain/sections';
 import type { DaySections, GroupBucket, SpaceGroup } from '@/domain/sections';
 import { isVirtualOccurrence, virtualOccurrences } from '@/domain/recurrence';
@@ -191,6 +197,23 @@ export function TaskList() {
   const reorderAt = (from: number, to: number) =>
     reorderGroups(moveItem(spaceGroups, from, to).map((g) => g.id));
 
+  // 보고 있는 날의 체크리스트를 텍스트로 클립보드에 복사(스탠드업·메신저 공유용).
+  // [전체] 탭이면 공간별 블록, 특정 공간이면 평면. 날짜 라벨은 fmtDay 선례와 동일 포맷.
+  const copySummary = async () => {
+    const blocks: SummaryBlock[] = isAll
+      ? spaceGroupsView.map((sv) => ({ title: sv.name, sections: sv.sections }))
+      : [{ sections }];
+    const label = format(parseISO(viewedDate), 'M월 d일 (EEE)', { locale: ko });
+    const text = formatDaySummary(label, blocks);
+    try {
+      if (!navigator.clipboard) throw new Error('clipboard unavailable');
+      await navigator.clipboard.writeText(text);
+      toast('오늘 요약을 복사했어요');
+    } catch {
+      toast.error('복사하지 못했어요');
+    }
+  };
+
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       {showHeader && (
@@ -209,6 +232,16 @@ export function TaskList() {
                 <span className="text-xs text-muted">완료</span>
               </div>
               <div className="flex items-center gap-2">
+                {/* 오늘 요약 복사: 보고 있는 날의 체크리스트를 텍스트로 클립보드에 담는다. */}
+                <button
+                  type="button"
+                  onClick={copySummary}
+                  aria-label="오늘 요약 복사"
+                  title="오늘 요약 복사"
+                  className="rounded-md p-1 text-muted transition hover:text-text"
+                >
+                  <Copy className="size-4" />
+                </button>
                 {/* 전체 펼치기/접기: 공간·그룹 섹션을 한 번에 연다/닫는다(현재 뷰의 섹션만). */}
                 {showCollapseControls && (
                   <div className="flex items-center">
@@ -696,7 +729,17 @@ function SectionsView({
         <Section title="남은 일" tone="carried" icon={CornerDownRight} count={sections.carried.length}>
           <AnimatePresence initial={false}>
             {sections.carried.map((t) => (
-              <TaskItem key={t.id} task={t} overdueDays={t.overdueDays} {...extra} />
+              <TaskItem
+                key={t.id}
+                task={t}
+                overdueDays={t.overdueDays}
+                onNudgeToSomeday={
+                  moveProps && t.overdueDays >= NUDGE_OVERDUE_DAYS
+                    ? (task) => moveProps.onMoveToDate(task, null)
+                    : undefined
+                }
+                {...extra}
+              />
             ))}
           </AnimatePresence>
         </Section>

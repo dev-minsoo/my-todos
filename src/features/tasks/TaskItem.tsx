@@ -3,6 +3,7 @@ import { motion, useMotionValue, useTransform, type PanInfo } from 'framer-motio
 import {
   ArrowRightLeft,
   Ban,
+  CalendarOff,
   CheckCircle2,
   ChevronDown,
   Circle,
@@ -41,6 +42,8 @@ type Props = {
   task: Task;
   /** 넘어옴 항목이면 밀린 일수 */
   overdueDays?: number;
+  /** 넘기면 "나중에로" 넛지 칩이 뜬다(한 탭으로 날짜 미정 이동). 임계 판정은 호출부가 한다. */
+  onNudgeToSomeday?: (task: Task) => void;
   onToggle?: (task: Task) => void;
   onRename?: (task: Task, title: string) => void;
   onDelete?: (task: Task) => void;
@@ -67,6 +70,7 @@ const SWIPE_VELOCITY = 600;
 export function TaskItem({
   task,
   overdueDays,
+  onNudgeToSomeday,
   onToggle,
   onRename,
   onDelete,
@@ -289,6 +293,18 @@ export function TaskItem({
           <span className="shrink-0 rounded-full bg-overdueBg px-2 py-0.5 text-[11px] font-medium text-overdueFg">
             {overdueDays}일 지남
           </span>
+        )}
+
+        {onNudgeToSomeday != null && !done && !cancelled && (
+          <button
+            type="button"
+            onClick={() => onNudgeToSomeday(task)}
+            aria-label="나중에로 옮기기"
+            className="inline-flex shrink-0 items-center gap-1 rounded-full bg-surface2 px-2 py-0.5 text-[11px] font-medium text-muted transition hover:text-accent max-md:py-1"
+          >
+            <CalendarOff className="size-3" />
+            나중에로
+          </button>
         )}
 
         {canMove && (

@@ -4,6 +4,13 @@ import { cancellationDay, completionDay, daysBetween } from './dayBoundary';
 /** 넘어옴 항목: 며칠 밀렸는지(overdueDays)를 함께 계산해 둔다 */
 export type CarriedTask = Task & { overdueDays: number };
 
+/**
+ * "며칠 이상 밀리면 '나중에로' 넛지를 권하는가"의 단일 출처.
+ * 넘어옴(carried) 항목의 overdueDays가 이 값 이상이면 하루 화면에서 넛지 칩을 띄운다.
+ * (필터 로직은 바꾸지 않는다 — 표시 임계일 뿐.)
+ */
+export const NUDGE_OVERDUE_DAYS = 3;
+
 export type DaySections = {
   /** 넘어옴 — 오늘 화면에서만 채워진다 (지난 날 미완료가 계산으로 이월) */
   carried: CarriedTask[];
