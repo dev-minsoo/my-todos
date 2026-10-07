@@ -263,7 +263,12 @@ export function TaskItem({
             )}
           >
             {subTotal > 0 ? (
-              <span className="tabular-nums">
+              <span
+                className={cn(
+                  'rounded-full px-1.5 py-0.5 text-[11px] font-medium tabular-nums',
+                  subDone === subTotal ? 'bg-accent/15 text-accent' : 'bg-surface2 text-muted'
+                )}
+              >
                 {subDone}/{subTotal}
               </span>
             ) : hasMemo ? (
