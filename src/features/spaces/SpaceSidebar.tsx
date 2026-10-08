@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react';
 import {
   BarChart3,
+  CalendarClock,
   CalendarDays,
   Clock,
   Layers,
@@ -139,6 +140,9 @@ export function SpaceSidebar() {
             <RailButton label="나중에" active={activeView === 'someday'} onClick={() => setView('someday')}>
               <Clock className="size-4" />
             </RailButton>
+            <RailButton label="앞으로" active={activeView === 'upcoming'} onClick={() => setView('upcoming')}>
+              <CalendarClock className="size-4" />
+            </RailButton>
             <RailButton label="메모" active={activeView === 'memo'} onClick={() => setView('memo')}>
               <NotebookPen className="size-4" />
             </RailButton>
@@ -164,6 +168,10 @@ export function SpaceSidebar() {
             <NavItem active={activeView === 'someday'} onClick={() => setView('someday')}>
               <Clock className="size-4 shrink-0 text-muted" />
               <span>나중에</span>
+            </NavItem>
+            <NavItem active={activeView === 'upcoming'} onClick={() => setView('upcoming')}>
+              <CalendarClock className="size-4 shrink-0 text-muted" />
+              <span>앞으로</span>
             </NavItem>
             <NavItem active={activeView === 'memo'} onClick={() => setView('memo')}>
               <NotebookPen className="size-4 shrink-0 text-muted" />

@@ -6,7 +6,7 @@ import { addDaysStr, todayStr } from '@/domain/dayBoundary';
 /** 테마 선택: 시스템 따름 / 라이트 강제 / 다크 강제 */
 export type Theme = 'system' | 'light' | 'dark';
 
-/** 본문에 표시할 화면 (하루 / 기록 달력 / 검색 / 메모 / 리포트 / 나중에 / 설정 / 휴지통) */
+/** 본문에 표시할 화면 (하루 / 기록 달력 / 검색 / 메모 / 리포트 / 나중에 / 앞으로 / 설정 / 휴지통) */
 export type AppView =
   | 'day'
   | 'calendar'
@@ -14,6 +14,7 @@ export type AppView =
   | 'memo'
   | 'report'
   | 'someday'
+  | 'upcoming'
   | 'settings'
   | 'trash';
 
