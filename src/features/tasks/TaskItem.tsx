@@ -61,6 +61,12 @@ type Props = {
   dragHandle?: boolean;
   /** 핸들에서 포인터를 누르면 세로 리오더 드래그를 시작한다 (Reorder.Item의 dragControls.start) */
   onDragHandlePointerDown?: (e: ReactPointerEvent) => void;
+  /** 멀티 선택 모드 — 체크박스를 앞에 띄우고 조작(스와이프·우측 액션)을 끈다. 가상 발생분은 선택 불가. */
+  selectable?: boolean;
+  /** 선택됨 여부(selectable일 때만 의미) */
+  selected?: boolean;
+  /** 체크박스/제목 탭으로 선택을 토글한다 */
+  onToggleSelect?: (task: Task) => void;
 };
 
 // 스와이프 판정 임계: 이동 거리(px) 또는 튕기는 속도(px/s)
@@ -81,11 +87,17 @@ export function TaskItem({
   detailProps,
   dragHandle,
   onDragHandlePointerDown,
+  selectable,
+  selected,
+  onToggleSelect,
 }: Props) {
   const done = task.completedAt != null;
   const cancelled = task.cancelledAt != null;
   // 가상 발생분은 아직 실체화 전이라 순서변경·이동·메모/서브태스크를 걸지 않는다.
   const isVirtual = isVirtualOccurrence(task);
+  // 선택 모드: 가상 발생분은 저장된 행이 아니라 선택 대상에서 뺀다(비활성 표시).
+  const selectMode = selectable === true;
+  const canSelect = selectMode && !isVirtual;
   const canMove = !isVirtual && moveProps != null;
   const canDetail = !isVirtual && detailProps != null;
   const recurrence =
@@ -165,7 +177,7 @@ export function TaskItem({
 
       {/* 앞 레이어: 실제 항목. 불투명 배경으로 뒤 힌트를 평소엔 가린다. */}
       <motion.div
-        drag={editing || cancelled ? false : 'x'}
+        drag={editing || cancelled || selectMode ? false : 'x'}
         dragConstraints={{ left: 0, right: 0 }}
         dragElastic={0.35}
         dragMomentum={false}
@@ -173,10 +185,12 @@ export function TaskItem({
         onDragEnd={handleDragEnd}
         className={cn(
           'group relative flex items-center gap-3 rounded-xl bg-surface px-3 py-2.5 transition hover:bg-surface2',
-          cancelled && 'opacity-60'
+          cancelled && 'opacity-60',
+          canSelect && selected && 'bg-accentSoft ring-1 ring-accent',
+          selectMode && isVirtual && 'opacity-40'
         )}
       >
-        {dragHandle && !isVirtual && (
+        {dragHandle && !isVirtual && !selectMode && (
           <button
             type="button"
             aria-label="순서 변경"
@@ -194,7 +208,27 @@ export function TaskItem({
           </button>
         )}
 
-        {cancelled ? (
+        {selectMode ? (
+          canSelect ? (
+            <motion.button
+              onClick={() => onToggleSelect?.(task)}
+              whileTap={{ scale: 0.85 }}
+              aria-label={selected ? '선택 해제' : '선택'}
+              aria-pressed={selected}
+              className={cn(
+                'shrink-0 transition max-md:p-2',
+                selected ? 'text-accent' : 'text-muted hover:text-accent'
+              )}
+            >
+              {selected ? <CheckCircle2 className="size-5" /> : <Circle className="size-5" />}
+            </motion.button>
+          ) : (
+            // 가상 발생분 — 선택 대상이 아니라 비활성 글리프만.
+            <span className="shrink-0 text-muted opacity-50 max-md:p-2" aria-hidden>
+              <Circle className="size-5" />
+            </span>
+          )
+        ) : cancelled ? (
           // 취소된 항목: 완료 토글 대신 복구(취소 해제) 어포던스. 완료 섹션에서
           // 체크를 다시 눌러 완료 해제하는 것과 대칭 — 상태 글리프가 곧 되돌리기 버튼.
           <motion.button
@@ -236,6 +270,27 @@ export function TaskItem({
             aria-label="할 일 수정"
             className="min-w-0 flex-1 rounded-lg bg-surface px-2 py-1 text-sm outline-none ring-1 ring-accent"
           />
+        ) : canSelect ? (
+          // 선택 모드: 제목 탭도 선택 토글(상세 모달 대신).
+          <button
+            onClick={() => onToggleSelect?.(task)}
+            className={cn(
+              'min-w-0 flex-1 truncate text-left text-sm',
+              (done || cancelled) && 'text-muted line-through'
+            )}
+          >
+            {task.title}
+          </button>
+        ) : selectMode ? (
+          // 가상 발생분(선택 불가) — 탭 비활성.
+          <span
+            className={cn(
+              'min-w-0 flex-1 truncate text-sm',
+              (done || cancelled) && 'text-muted line-through'
+            )}
+          >
+            {task.title}
+          </span>
         ) : (
           <button
             onClick={() => openDetail(task.id)}
@@ -250,7 +305,7 @@ export function TaskItem({
         )}
 
         {/* 펼침 토글: 서브태스크 진행(완료/총계) 또는 메모 유무 점을 겸한다. */}
-        {canDetail && (
+        {canDetail && !selectMode && (
           <button
             type="button"
             onClick={() => setExpanded((v) => !v)}
@@ -281,7 +336,7 @@ export function TaskItem({
         )}
 
         {task.recurrenceId != null &&
-          (recurrence ? (
+          (recurrence && !selectMode ? (
             <RecurrencePopover
               recurrence={recurrence}
               onUpdate={recurrenceProps!.onUpdate}
@@ -300,7 +355,7 @@ export function TaskItem({
           </span>
         )}
 
-        {onNudgeToSomeday != null && !done && !cancelled && (
+        {onNudgeToSomeday != null && !done && !cancelled && !selectMode && (
           <button
             type="button"
             onClick={() => onNudgeToSomeday(task)}
@@ -312,7 +367,7 @@ export function TaskItem({
           </button>
         )}
 
-        {canMove && (
+        {canMove && !selectMode && (
           <MoveTaskPopover
             task={task}
             {...moveProps!}
@@ -325,7 +380,7 @@ export function TaskItem({
 
         {/* 제목 수정: 제목 클릭이 상세 모달을 여므로 편집은 이 버튼(또는 e키)으로.
             모바일엔 스와이프 대체가 없어 상시 노출한다. */}
-        {!editing && (
+        {!editing && !selectMode && (
           <button
             onClick={startEdit}
             aria-label="제목 수정"
@@ -337,7 +392,7 @@ export function TaskItem({
 
         {/* 취소: 완료도 삭제도 아닌 '흐지부지' 닫기. 미완료·미취소 항목에만 노출.
             완료한 항목은 이미 긍정적으로 닫혔으므로 취소 버튼을 숨긴다. */}
-        {!cancelled && !done && onCancel && (
+        {!cancelled && !done && onCancel && !selectMode && (
           <button
             onClick={() => onCancel(task)}
             aria-label="취소"
@@ -349,13 +404,15 @@ export function TaskItem({
         )}
 
         {/* 삭제 X: 데스크톱은 hover/focus로 노출. 모바일은 왼쪽 스와이프로 삭제하므로 상시 노출하지 않는다(행 정돈). */}
-        <button
-          onClick={() => onDelete?.(task)}
-          aria-label="삭제"
-          className="shrink-0 rounded-md p-1 text-muted opacity-0 transition hover:text-red-500 focus-visible:opacity-100 group-hover:opacity-100"
-        >
-          <X className="size-4" />
-        </button>
+        {!selectMode && (
+          <button
+            onClick={() => onDelete?.(task)}
+            aria-label="삭제"
+            className="shrink-0 rounded-md p-1 text-muted opacity-0 transition hover:text-red-500 focus-visible:opacity-100 group-hover:opacity-100"
+          >
+            <X className="size-4" />
+          </button>
+        )}
       </motion.div>
 
       {/* 펼침 패널: 앞 드래그 레이어 바깥, layout 래퍼 안의 형제(스와이프에 안 먹히게).

@@ -607,6 +607,167 @@ export function useTasks() {
     return map;
   }, [query.data]);
 
+  // ───────────────────────── 벌크(멀티 선택) ─────────────────────────
+  // 하루 화면 선택 모드에서 여러 개를 한 번에 처리한다. 기존 단일 뮤테이션의 write shape를
+  // 그대로 쓰되 낙관적 패치는 한 번, write는 Promise.all, 토스트(전체 Undo)도 한 번이다.
+  // 가상 반복 발생분(isVirtualOccurrence)은 아직 저장된 행이 아니므로 대상에서 제외한다.
+
+  // 낙관적 패치 1회 + N개 write(Promise.all) + 실패 롤백 + invalidate 1회. 토스트는 호출부가 붙인다.
+  const bulkWrite = async (
+    optimistic: (p: Task[]) => Task[],
+    writes: () => Promise<void>[],
+    fallback: string
+  ): Promise<boolean> => {
+    const ctx = await snapshot();
+    patch(optimistic);
+    try {
+      await Promise.all(writes());
+      return true;
+    } catch (e) {
+      rollback(e, ctx, fallback);
+      return false;
+    } finally {
+      invalidate();
+    }
+  };
+
+  const updateById = async (id: string, fields: Record<string, unknown>): Promise<void> => {
+    const { error } = await supabase.from('tasks').update(fields).eq('id', id);
+    if (error) throw error;
+  };
+
+  // 삭제·복구는 부모+서브태스크를 함께 바꾼다(.or 캐스케이드 — remove와 동일 shape).
+  const cascadeDeletedAt = async (id: string, deletedAt: string | null): Promise<void> => {
+    const { error } = await supabase
+      .from('tasks')
+      .update({ deleted_at: deletedAt })
+      .or(`id.eq.${id},parent_id.eq.${id}`);
+    if (error) throw error;
+  };
+
+  // 완료: 미완·미취소인 실제 행만 완료로. Undo는 다시 미완(null)으로.
+  const bulkComplete = async (tasks: Task[]) => {
+    const targets = tasks.filter(
+      (t) => !isVirtualOccurrence(t) && t.completedAt == null && t.cancelledAt == null
+    );
+    if (targets.length === 0) return;
+    const ids = new Set(targets.map((t) => t.id));
+    const now = new Date().toISOString();
+    const ok = await bulkWrite(
+      (p) => p.map((t) => (ids.has(t.id) ? { ...t, completedAt: now } : t)),
+      () => targets.map((t) => updateById(t.id, { completed_at: now })),
+      '완료 처리하지 못했습니다.'
+    );
+    if (!ok) return;
+    toast(`${targets.length}개 완료`, {
+      action: {
+        label: '실행 취소',
+        onClick: () =>
+          void bulkWrite(
+            (p) => p.map((t) => (ids.has(t.id) ? { ...t, completedAt: null } : t)),
+            () => targets.map((t) => updateById(t.id, { completed_at: null })),
+            '되돌리지 못했습니다.'
+          ),
+      },
+    });
+  };
+
+  // 취소: 미취소인 실제 행만 취소로(completed_at은 null로). Undo는 직전값(완료 여부)으로 복원.
+  const bulkCancel = async (tasks: Task[]) => {
+    const targets = tasks.filter((t) => !isVirtualOccurrence(t) && t.cancelledAt == null);
+    if (targets.length === 0) return;
+    const ids = new Set(targets.map((t) => t.id));
+    const prev = new Map(
+      targets.map((t) => [t.id, { cancelledAt: t.cancelledAt, completedAt: t.completedAt }])
+    );
+    const now = new Date().toISOString();
+    const ok = await bulkWrite(
+      (p) => p.map((t) => (ids.has(t.id) ? { ...t, cancelledAt: now, completedAt: null } : t)),
+      () => targets.map((t) => updateById(t.id, { cancelled_at: now, completed_at: null })),
+      '취소하지 못했습니다.'
+    );
+    if (!ok) return;
+    toast(`${targets.length}개 취소`, {
+      action: {
+        label: '실행 취소',
+        onClick: () =>
+          void bulkWrite(
+            (p) =>
+              p.map((t) => {
+                const pr = prev.get(t.id);
+                return pr ? { ...t, cancelledAt: pr.cancelledAt, completedAt: pr.completedAt } : t;
+              }),
+            () =>
+              targets.map((t) => {
+                const pr = prev.get(t.id)!;
+                return updateById(t.id, {
+                  cancelled_at: pr.cancelledAt,
+                  completed_at: pr.completedAt,
+                });
+              }),
+            '되돌리지 못했습니다.'
+          ),
+      },
+    });
+  };
+
+  // 이동: 지정한 날짜(또는 null=나중에)로. 이미 그 날짜면 건너뜀. Undo는 각자 직전 날짜로.
+  const bulkMoveToDate = async (tasks: Task[], dueDate: string | null) => {
+    const targets = tasks.filter((t) => !isVirtualOccurrence(t) && t.dueDate !== dueDate);
+    if (targets.length === 0) return;
+    const ids = new Set(targets.map((t) => t.id));
+    const prevDate = new Map(targets.map((t) => [t.id, t.dueDate]));
+    const ok = await bulkWrite(
+      (p) => p.map((t) => (ids.has(t.id) ? { ...t, dueDate } : t)),
+      () => targets.map((t) => updateById(t.id, { due_date: dueDate })),
+      '옮기지 못했습니다.'
+    );
+    if (!ok) return;
+    toast(`${targets.length}개를 ${moveDateLabel(dueDate)}로 옮김`, {
+      action: {
+        label: '실행 취소',
+        onClick: () =>
+          void bulkWrite(
+            (p) => p.map((t) => (ids.has(t.id) ? { ...t, dueDate: prevDate.get(t.id) ?? null } : t)),
+            () => targets.map((t) => updateById(t.id, { due_date: prevDate.get(t.id) ?? null })),
+            '되돌리지 못했습니다.'
+          ),
+      },
+    });
+  };
+
+  // 삭제: 실제 행을 부모+서브태스크 캐스케이드로 소프트 삭제. Undo는 보관해 둔 행을 되살려 끼운다.
+  const bulkDelete = async (tasks: Task[]) => {
+    const targets = tasks.filter((t) => !isVirtualOccurrence(t));
+    if (targets.length === 0) return;
+    const parentIds = new Set(targets.map((t) => t.id));
+    const belongs = (t: Task) =>
+      parentIds.has(t.id) || (t.parentId != null && parentIds.has(t.parentId));
+    // 캐스케이드로 함께 사라질 서브태스크까지 포함해 복원용으로 보관.
+    const removed = (qc.getQueryData<Task[]>(key) ?? []).filter(belongs);
+    const now = new Date().toISOString();
+    const ok = await bulkWrite(
+      (p) => p.filter((t) => !belongs(t)),
+      () => targets.map((t) => cascadeDeletedAt(t.id, now)),
+      '삭제하지 못했습니다.'
+    );
+    if (!ok) return;
+    toast(`${targets.length}개 삭제`, {
+      action: {
+        label: '실행 취소',
+        onClick: () =>
+          void bulkWrite(
+            (p) => {
+              const have = new Set(p.map((t) => t.id));
+              return [...p, ...removed.filter((t) => !have.has(t.id))];
+            },
+            () => targets.map((t) => cascadeDeletedAt(t.id, null)),
+            '되돌리지 못했습니다.'
+          ),
+      },
+    });
+  };
+
   return {
     tasks: parentTasks,
     /** 부모 id → 그 아래 서브태스크 목록(position 정렬). TaskItem 펼침 패널에서 쓴다. */
@@ -657,5 +818,10 @@ export function useTasks() {
       addSub.mutate({ parent, title, position: nextSubtaskPosition(parent.id) }),
     /** 메모 저장 — 빈 값은 null로 지운다. */
     updateMemo: (id: string, memo: string) => memoMut.mutate({ id, memo: memo.trim() || null }),
+    /** 벌크(멀티 선택): 여러 개를 한 번에 처리하고 토스트 하나로 전체 Undo. 가상 발생분은 제외된다. */
+    bulkComplete,
+    bulkCancel,
+    bulkMoveToDate,
+    bulkDelete,
   };
 }

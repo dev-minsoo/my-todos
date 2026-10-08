@@ -23,12 +23,14 @@ import {
   Copy,
   CornerDownRight,
   Feather,
+  ListChecks,
   Trash2,
+  X,
   type LucideIcon,
 } from 'lucide-react';
 import { ALL_TAB, type Group } from '@/db/types';
 import { useUiStore } from '@/store/uiStore';
-import { todayStr } from '@/domain/dayBoundary';
+import { addDaysStr, todayStr } from '@/domain/dayBoundary';
 import { formatDaySummary, type SummaryBlock } from '@/domain/summary';
 import { positionBetween } from '@/domain/order';
 import {
@@ -53,6 +55,8 @@ import type { TaskMoveProps } from './MoveTaskPopover';
 import { TaskItem, type RecurrenceProps, type TaskDetailProps } from './TaskItem';
 import { TaskDetailModal } from './TaskDetailModal';
 import { ErrorState } from '@/components/ErrorState';
+import { PopoverMenu } from '@/components/PopoverMenu';
+import { MiniCalendar } from '@/features/day/MiniCalendar';
 import { useTasks } from './useTasks';
 
 const byPosition = (a: Group, b: Group) =>
@@ -66,6 +70,8 @@ export function TaskList() {
   // 헤더의 전체 펼치기/접기 — 공간·그룹 섹션을 한 번에 연다/닫는다(할 일 메모·하위 패널은 대상 아님).
   const collapseAll = useUiStore((s) => s.collapseAll);
   const expandAll = useUiStore((s) => s.expandAll);
+  // 선택 모드 진입 시 인라인 수정과 겹치지 않게 편집 상태를 비운다.
+  const setEditingTaskId = useUiStore((s) => s.setEditingTaskId);
 
   const userId = useUserId();
   const { activeTab, spaces } = useActiveTab();
@@ -87,9 +93,23 @@ export function TaskList() {
     moveTaskToDate,
     moveTaskToSpace,
     reorderTask,
+    bulkComplete,
+    bulkCancel,
+    bulkMoveToDate,
+    bulkDelete,
   } = useTasks();
   const { groups, renameGroup, deleteGroup, reorderGroups } = useGroups();
   const { recurrences, updateRecurrence, removeRecurrence } = useRecurrences();
+
+  // 멀티 선택 모드(세션 로컬) — 여러 개를 체크해 한 번에 완료/이동/취소/삭제한다.
+  // 선택 상태는 저장하지 않고, 날짜·공간을 옮기면 비운다(모드는 유지해 연속 배치).
+  const [selectMode, setSelectMode] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+
+  // 날짜·공간을 옮기면 선택은 그 화면 것만 유효하므로 비운다(모드는 유지).
+  useEffect(() => {
+    setSelectedIds(new Set());
+  }, [viewedDate, activeTab]);
 
   const today = todayStr();
   const isAll = activeTab === ALL_TAB;
@@ -146,7 +166,8 @@ export function TaskList() {
   const pct = count.total > 0 ? Math.round((count.done / count.total) * 100) : 0;
   const allDone = count.total > 0 && count.done === count.total; // 오늘 다 끝냈을 때 축하 배너 조건
   // 빈 오늘에도 헤더를 유지해 첫 항목 추가 시 레이아웃이 튀지 않게 한다(빈 과거 날은 EmptyState만).
-  const showHeader = !isEmpty || isToday;
+  // 선택 모드일 때도 유지해 벌크 바(와 종료 버튼)에 늘 닿을 수 있게 한다.
+  const showHeader = !isEmpty || isToday || selectMode;
 
   // 전체 탭에서는 공간별로 묶는다 (SPEC §82)
   const spaceGroupsView = isAll ? groupSectionsBySpace(dayTasks, spaces, viewedDate, today) : [];
@@ -181,7 +202,45 @@ export function TaskList() {
   // 단일 공간 뷰(그리고 각 그룹 버킷)의 "할 일"에서만 쓴다. [전체] 탭·완료/넘어옴은 제외.
   const commitReorder: ReorderCommit = (movedId, before, after) =>
     reorderTask(movedId, positionBetween(before, after));
-  const reorderCtl = isAll ? undefined : commitReorder;
+  // 선택 모드에선 드래그 리오더를 끈다 → open 섹션이 평면 맵 경로로 렌더되어 선택 props가 흘러간다.
+  const reorderCtl = isAll || selectMode ? undefined : commitReorder;
+
+  // ───────── 멀티 선택 ─────────
+  // 선택 가능한(=이미 저장된 실제) 행만. 가상 반복 발생분은 선택 대상이 아니다.
+  const selectableIds = scoped.filter((t) => !isVirtualOccurrence(t)).map((t) => t.id);
+  const canSelectAny = selectableIds.length > 0;
+  // 벌크 처리 입력 — 선택된 실제 행들(보는 화면 스코프 안에서만).
+  const selectedTasks = scoped.filter((t) => selectedIds.has(t.id));
+
+  const enterSelect = () => {
+    setEditingTaskId(null);
+    setSelectMode(true);
+  };
+  const exitSelect = () => {
+    setSelectMode(false);
+    setSelectedIds(new Set());
+  };
+  const toggleSelect = (task: Task) =>
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(task.id)) next.delete(task.id);
+      else next.add(task.id);
+      return next;
+    });
+  const selectAll = () => setSelectedIds(new Set(selectableIds));
+  const clearSelection = () => setSelectedIds(new Set());
+
+  // 벌크 실행 후 선택만 비운다(모드는 유지). 벌크 함수는 입력 배열을 await 전에 동기로 읽으므로
+  // 호출 직후 비워도 안전하다. Undo는 각 벌크 함수의 토스트 하나로 전체를 되돌린다.
+  const runBulk = (fn: (tasks: Task[]) => void) => {
+    fn(selectedTasks);
+    setSelectedIds(new Set());
+  };
+
+  // SectionsView/GroupSection/SpaceSection으로 흘려보낼 선택 묶음(모드일 때만).
+  const selection: SelectionProps | undefined = selectMode
+    ? { selectable: true, selectedIds, onToggleSelect: toggleSelect }
+    : undefined;
 
   // 통합 이동(날짜·공간·그룹) 값 묶음 — 모든 뷰의 항목에 붙는다.
   // 그룹 목록은 전 공간을 넘기고, 팝오버가 각 항목의 spaceId로 걸러 쓴다([전체] 탭 대응).
@@ -218,10 +277,29 @@ export function TaskList() {
     <div className="flex min-h-0 flex-1 flex-col">
       {showHeader && (
         <div className="flex items-center justify-between gap-4 border-b border-border px-5 py-3.5">
-          {noCountable ? (
+          {selectMode ? (
+            <BulkBar
+              count={selectedIds.size}
+              total={selectableIds.length}
+              today={today}
+              onComplete={() => runBulk(bulkComplete)}
+              onCancel={() => runBulk(bulkCancel)}
+              onDelete={() => runBulk(bulkDelete)}
+              onMove={(date) => {
+                bulkMoveToDate(selectedTasks, date);
+                setSelectedIds(new Set());
+              }}
+              onSelectAll={selectAll}
+              onClear={clearSelection}
+              onExit={exitSelect}
+            />
+          ) : noCountable ? (
             <>
               <span className="text-sm text-muted">할 일</span>
-              <div className="h-1.5 w-28 overflow-hidden rounded-full bg-surface2" aria-hidden />
+              <div className="flex items-center gap-2">
+                {canSelectAny && <SelectToggleButton onClick={enterSelect} />}
+                <div className="h-1.5 w-28 overflow-hidden rounded-full bg-surface2" aria-hidden />
+              </div>
             </>
           ) : (
             <>
@@ -232,6 +310,7 @@ export function TaskList() {
                 <span className="text-xs text-muted">완료</span>
               </div>
               <div className="flex items-center gap-2">
+                {canSelectAny && <SelectToggleButton onClick={enterSelect} />}
                 {/* 오늘 요약 복사: 보고 있는 날의 체크리스트를 텍스트로 클립보드에 담는다. */}
                 <button
                   type="button"
@@ -318,6 +397,7 @@ export function TaskList() {
                   moveProps={moveProps}
                   recurrenceProps={recurrenceProps}
                   detailProps={detailProps}
+                  selection={selection}
                   onRenameGroup={renameGroup}
                   {...handlers}
                 />
@@ -356,6 +436,7 @@ export function TaskList() {
                     group && idx < spaceGroups.length - 1 ? () => reorderAt(idx, idx + 1) : undefined
                   }
                   reorder={reorderCtl}
+                  selection={selection}
                   {...handlers}
                 />
               );
@@ -373,6 +454,7 @@ export function TaskList() {
               moveProps={moveProps}
               recurrenceProps={recurrenceProps}
               detailProps={detailProps}
+              selection={selection}
               {...handlers}
             />
           </div>
@@ -436,7 +518,202 @@ function AllDoneBanner({ total }: { total: number }) {
   );
 }
 
+/** 헤더의 "여러 개 선택" 진입 버튼(복사·펼치기 버튼과 같은 톤). */
+function SelectToggleButton({ onClick }: { onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-label="여러 개 선택"
+      title="여러 개 선택"
+      className="rounded-md p-1 text-muted transition hover:text-text"
+    >
+      <ListChecks className="size-4" />
+    </button>
+  );
+}
+
+/**
+ * 선택 모드 헤더 바 — 좌: 종료·선택 수·전체선택/해제, 우: 완료·이동·취소·삭제.
+ * 아무것도 선택 안 했으면 액션은 비활성. 되돌리기는 각 벌크 함수가 토스트 하나로 전체를 묶는다.
+ */
+function BulkBar({
+  count,
+  total,
+  today,
+  onComplete,
+  onCancel,
+  onDelete,
+  onMove,
+  onSelectAll,
+  onClear,
+  onExit,
+}: {
+  count: number;
+  total: number;
+  today: string;
+  onComplete: () => void;
+  onCancel: () => void;
+  onDelete: () => void;
+  onMove: (date: string | null) => void;
+  onSelectAll: () => void;
+  onClear: () => void;
+  onExit: () => void;
+}) {
+  const none = count === 0;
+  const allSelected = total > 0 && count >= total;
+  return (
+    <div className="flex min-w-0 flex-1 items-center gap-2">
+      <button
+        type="button"
+        onClick={onExit}
+        aria-label="선택 모드 종료"
+        title="선택 모드 종료"
+        className="grid size-7 shrink-0 place-items-center rounded-md text-muted transition hover:bg-surface2 hover:text-text"
+      >
+        <X className="size-4" />
+      </button>
+      <span className="shrink-0 text-sm font-semibold tabular-nums">{count}개 선택</span>
+      <button
+        type="button"
+        onClick={allSelected ? onClear : onSelectAll}
+        disabled={total === 0}
+        className="shrink-0 rounded-md px-1.5 py-1 text-xs text-muted transition hover:text-text disabled:opacity-40"
+      >
+        {allSelected ? '선택 해제' : '전체 선택'}
+      </button>
+
+      <span className="min-w-0 flex-1" />
+
+      <div className="flex shrink-0 items-center gap-0.5">
+        <BulkActionButton label="완료" icon={CheckCircle2} onClick={onComplete} disabled={none} />
+        <BulkMovePopover today={today} onMove={onMove} disabled={none} />
+        <BulkActionButton label="취소" icon={Ban} onClick={onCancel} disabled={none} />
+        <BulkActionButton label="삭제" icon={Trash2} onClick={onDelete} disabled={none} danger />
+      </div>
+    </div>
+  );
+}
+
+function BulkActionButton({
+  label,
+  icon: Icon,
+  onClick,
+  disabled,
+  danger,
+}: {
+  label: string;
+  icon: LucideIcon;
+  onClick: () => void;
+  disabled?: boolean;
+  danger?: boolean;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      aria-label={label}
+      title={label}
+      className={cn(
+        'grid size-8 place-items-center rounded-md text-muted transition disabled:opacity-30',
+        danger ? 'hover:bg-red-500/10 hover:text-red-500' : 'hover:bg-surface2 hover:text-text'
+      )}
+    >
+      <Icon className="size-4" />
+    </button>
+  );
+}
+
+/** 벌크 날짜 이동 — 오늘/내일/나중에 퀵 + 달력. 선택이 없으면 비활성 버튼만 보인다. */
+function BulkMovePopover({
+  today,
+  onMove,
+  disabled,
+}: {
+  today: string;
+  onMove: (date: string | null) => void;
+  disabled?: boolean;
+}) {
+  if (disabled) {
+    return (
+      <button
+        type="button"
+        disabled
+        aria-label="날짜 이동"
+        title="날짜 이동"
+        className="grid size-8 place-items-center rounded-md text-muted opacity-30"
+      >
+        <CalendarDays className="size-4" />
+      </button>
+    );
+  }
+  return (
+    <PopoverMenu
+      align="end"
+      width={288}
+      triggerLabel="날짜 이동"
+      triggerClassName="grid size-8 place-items-center rounded-md text-muted transition hover:bg-surface2 hover:text-text"
+      trigger={<CalendarDays className="size-4" />}
+    >
+      {(close) => (
+        <div className="py-1">
+          <BulkMoveItem
+            label="오늘로"
+            onClick={() => {
+              onMove(today);
+              close();
+            }}
+          />
+          <BulkMoveItem
+            label="내일로"
+            onClick={() => {
+              onMove(addDaysStr(today, 1));
+              close();
+            }}
+          />
+          <BulkMoveItem
+            label="나중에로 (날짜 미정)"
+            onClick={() => {
+              onMove(null);
+              close();
+            }}
+          />
+          <div className="my-1 border-t border-border" />
+          <MiniCalendar
+            selectedDate={today}
+            onPick={(day) => {
+              onMove(day);
+              close();
+            }}
+          />
+        </div>
+      )}
+    </PopoverMenu>
+  );
+}
+
+function BulkMoveItem({ label, onClick }: { label: string; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      role="menuitem"
+      onClick={onClick}
+      className="flex w-full items-center px-3 py-2 text-left text-sm transition hover:bg-surface2"
+    >
+      {label}
+    </button>
+  );
+}
+
 type MoveProps = TaskMoveProps;
+
+/** 멀티 선택 묶음 — 선택 모드일 때 섹션 트리를 따라 각 TaskItem까지 흘려보낸다. */
+type SelectionProps = {
+  selectable: boolean;
+  selectedIds: Set<string>;
+  onToggleSelect: (task: Task) => void;
+};
 
 /**
  * [전체] 탭의 한 공간 묶음: 헤더(접기·색·이름·카운트) + 내용. 그룹처럼 접을 수 있다.
@@ -450,6 +727,7 @@ function SpaceSection({
   moveProps,
   recurrenceProps,
   detailProps,
+  selection,
   onRenameGroup,
   onToggle,
   onRename,
@@ -464,6 +742,7 @@ function SpaceSection({
   moveProps: MoveProps;
   recurrenceProps?: RecurrenceProps;
   detailProps?: TaskDetailProps;
+  selection?: SelectionProps;
   onRenameGroup: (id: string, name: string) => void;
 } & SectionHandlers) {
   const collapsed = useUiStore((s) => s.collapsedSpaces.includes(space.spaceId));
@@ -504,6 +783,7 @@ function SpaceSection({
                 moveProps={moveProps}
                 recurrenceProps={recurrenceProps}
                 detailProps={detailProps}
+                selection={selection}
                 onRenameGroup={onRenameGroup}
                 onToggle={onToggle}
                 onRename={onRename}
@@ -519,6 +799,7 @@ function SpaceSection({
             moveProps={moveProps}
             recurrenceProps={recurrenceProps}
             detailProps={detailProps}
+            selection={selection}
             onToggle={onToggle}
             onRename={onRename}
             onDelete={onDelete}
@@ -546,6 +827,7 @@ function GroupSection({
   recurrenceProps,
   detailProps,
   reorder,
+  selection,
   onToggle,
   onRename,
   onDelete,
@@ -563,6 +845,7 @@ function GroupSection({
   recurrenceProps?: RecurrenceProps;
   detailProps?: TaskDetailProps;
   reorder?: ReorderCommit;
+  selection?: SelectionProps;
   onRenameGroup: (id: string, name: string) => void;
   onDeleteGroup?: () => void;
   onMoveUp?: () => void;
@@ -661,6 +944,7 @@ function GroupSection({
             recurrenceProps={recurrenceProps}
             detailProps={detailProps}
             reorder={reorder}
+            selection={selection}
           />
         ) : (
           <p className="px-3 py-2 text-xs text-muted">아직 할 일이 없어요</p>
@@ -713,6 +997,7 @@ function SectionsView({
   recurrenceProps,
   detailProps,
   reorder,
+  selection,
 }: {
   sections: DaySections;
   moveProps?: MoveProps;
@@ -720,9 +1005,20 @@ function SectionsView({
   detailProps?: TaskDetailProps;
   /** 넘기면 "할 일" 목록을 세로 드래그로 리오더할 수 있다 */
   reorder?: ReorderCommit;
+  /** 넘기면 각 항목에 선택 체크박스가 뜬다(선택 모드). 리오더와 동시에 켜지지 않는다. */
+  selection?: SelectionProps;
 } & SectionHandlers) {
   // 항목에 공통으로 흘려보내는 핸들러·값 묶음(완료·취소 포함).
   const extra = { onToggle, onRename, onDelete, onCancel, onUncancel, moveProps, recurrenceProps, detailProps };
+  // 선택은 항목마다 다르므로(selected) extra에 못 넣고 항목별로 만들어 흘린다.
+  const selFor = (t: Task) =>
+    selection
+      ? {
+          selectable: selection.selectable,
+          selected: selection.selectedIds.has(t.id),
+          onToggleSelect: selection.onToggleSelect,
+        }
+      : {};
   return (
     <>
       {sections.carried.length > 0 && (
@@ -739,6 +1035,7 @@ function SectionsView({
                     : undefined
                 }
                 {...extra}
+                {...selFor(t)}
               />
             ))}
           </AnimatePresence>
@@ -753,7 +1050,7 @@ function SectionsView({
           <Section title="할 일">
             <AnimatePresence initial={false}>
               {sections.open.map((t) => (
-                <TaskItem key={t.id} task={t} {...extra} />
+                <TaskItem key={t.id} task={t} {...extra} {...selFor(t)} />
               ))}
             </AnimatePresence>
           </Section>
@@ -763,7 +1060,7 @@ function SectionsView({
         <Section title="완료" tone="done" count={sections.completed.length}>
           <AnimatePresence initial={false}>
             {sections.completed.map((t) => (
-              <TaskItem key={t.id} task={t} {...extra} />
+              <TaskItem key={t.id} task={t} {...extra} {...selFor(t)} />
             ))}
           </AnimatePresence>
         </Section>
@@ -773,7 +1070,7 @@ function SectionsView({
         <Section title="취소" tone="cancelled" icon={Ban} count={sections.cancelled.length}>
           <AnimatePresence initial={false}>
             {sections.cancelled.map((t) => (
-              <TaskItem key={t.id} task={t} {...extra} />
+              <TaskItem key={t.id} task={t} {...extra} {...selFor(t)} />
             ))}
           </AnimatePresence>
         </Section>
